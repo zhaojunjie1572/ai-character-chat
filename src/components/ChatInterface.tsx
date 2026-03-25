@@ -45,7 +45,7 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<any>(null);
 
   // 加载设置和消息
   useEffect(() => {

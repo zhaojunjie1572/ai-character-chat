@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Plus, Users, Settings, Key, Sparkles, MessageSquare, Trash2, Edit3, Volume2, Cloud, Download, Upload, RefreshCw, Check, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Plus, Users, Settings, Key, Sparkles, MessageSquare, Trash2, Edit3, Volume2, Cloud, Download, Upload, RefreshCw, Check, AlertCircle, Search } from 'lucide-react';
 import { useCharacters } from '@/hooks/useCharacters';
 import { CharacterCard } from '@/components/CharacterCard';
 import { CharacterForm } from '@/components/CharacterForm';
 import { ChatInterface } from '@/components/ChatInterface';
 import { Character } from '@/types/character';
 import { gistSyncService, SyncData } from '@/lib/gistSync';
+import { sortByPinyin, groupByFirstLetter, searchByPinyin, getAlphabetIndex, getFirstLetter } from '@/lib/pinyin';
 
 interface AppSettings {
   apiKey: string;
@@ -57,6 +58,10 @@ export default function Home() {
   const [syncMessage, setSyncMessage] = useState('');
   const [syncError, setSyncError] = useState('');
   const [showGistSetup, setShowGistSetup] = useState(false);
+  
+  // 搜索和排序
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [selectedLetter, setSelectedLetter] = useState<string>('');
 
   useEffect(() => {
     const savedSettings = localStorage.getItem('ai_app_settings');
@@ -284,6 +289,32 @@ export default function Home() {
   const hasApiKey = !!apiSettings.apiKey;
   const hasGistConfig = !!apiSettings.gistToken;
 
+  // 过滤和排序角色
+  const filteredCharacters = useMemo(() => {
+    let result = characters;
+    
+    // 搜索过滤
+    if (searchKeyword) {
+      result = searchByPinyin(result, c => c.name, searchKeyword);
+    }
+    
+    // 按拼音排序
+    result = sortByPinyin(result, c => c.name);
+    
+    return result;
+  }, [characters, searchKeyword]);
+
+  // 按首字母分组
+  const groupedCharacters = useMemo(() => {
+    return groupByFirstLetter(filteredCharacters, c => c.name);
+  }, [filteredCharacters]);
+
+  // 获取所有可用的字母索引
+  const availableLetters = useMemo(() => {
+    const letters = Object.keys(groupedCharacters).sort();
+    return letters;
+  }, [groupedCharacters]);
+
   if (!isLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-purple-50">
@@ -434,73 +465,148 @@ export default function Home() {
           </div>
         ) : (
           <>
-            <div className="flex items-center justify-between mb-6">
+            {/* 搜索和统计 */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
               <h2 className="text-lg font-semibold text-gray-900">
-                我的角色 ({characters.length})
+                我的角色 ({filteredCharacters.length}/{characters.length})
               </h2>
-              {hasApiKey && (
-                <p className="text-sm text-gray-500">
-                  点击角色卡片上的对话按钮开始聊天
-                </p>
-              )}
+              
+              {/* 搜索框 */}
+              <div className="relative w-full sm:w-72">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchKeyword}
+                  onChange={(e) => setSearchKeyword(e.target.value)}
+                  placeholder="搜索角色（支持拼音）..."
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+                {searchKeyword && (
+                  <button
+                    onClick={() => setSearchKeyword('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {characters.map((character) => (
-                <div
-                  key={character.id}
-                  className="group bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden"
+
+            {/* 字母索引 */}
+            {availableLetters.length > 0 && !searchKeyword && (
+              <div className="flex flex-wrap gap-1 mb-6">
+                <button
+                  onClick={() => setSelectedLetter('')}
+                  className={`px-3 py-1 text-sm rounded-lg transition-colors ${
+                    selectedLetter === '' 
+                      ? 'bg-primary-600 text-white' 
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
                 >
-                  <div className="p-5">
-                    <div className="flex items-start gap-4">
-                      <div className="relative">
-                        <img
-                          src={character.avatar}
-                          alt={character.name}
-                          className="w-16 h-16 rounded-2xl object-cover shadow-md group-hover:scale-105 transition-transform"
-                        />
-                        <button
-                          onClick={() => setChattingCharacter(character)}
-                          className="absolute -bottom-2 -right-2 w-8 h-8 bg-gradient-to-br from-primary-500 to-purple-600 text-white rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
-                        >
-                          <MessageSquare className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="text-lg font-bold text-gray-900 truncate">
-                            {character.name}
-                          </h3>
-                        </div>
-                        {character.title && (
-                          <span className="inline-block text-xs text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full mb-2">
-                            {character.title}
-                          </span>
-                        )}
-                        <p className="text-sm text-gray-500 line-clamp-2">
-                          {character.description || '暂无描述'}
-                        </p>
+                  全部
+                </button>
+                {getAlphabetIndex().map(letter => {
+                  const hasChars = availableLetters.includes(letter);
+                  const isActive = selectedLetter === letter;
+                  return (
+                    <button
+                      key={letter}
+                      onClick={() => setSelectedLetter(isActive ? '' : letter)}
+                      disabled={!hasChars}
+                      className={`px-3 py-1 text-sm rounded-lg transition-colors ${
+                        isActive 
+                          ? 'bg-primary-600 text-white' 
+                          : hasChars 
+                            ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' 
+                            : 'bg-gray-50 text-gray-300 cursor-not-allowed'
+                      }`}
+                    >
+                      {letter}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 角色列表 */}
+            {filteredCharacters.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-gray-500">没有找到匹配的角色</p>
+              </div>
+            ) : (
+              <div className="space-y-8">
+                {Object.entries(groupedCharacters)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .filter(([letter]) => !selectedLetter || letter === selectedLetter)
+                  .map(([letter, chars]) => (
+                    <div key={letter} id={`letter-${letter}`}>
+                      <h3 className="text-sm font-medium text-gray-400 mb-3 flex items-center gap-2">
+                        <span className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-xs">
+                          {letter}
+                        </span>
+                        <span>{chars.length} 个角色</span>
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {chars.map((character) => (
+                          <div
+                            key={character.id}
+                            className="group bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden"
+                          >
+                            <div className="p-5">
+                              <div className="flex items-start gap-4">
+                                <div className="relative">
+                                  <img
+                                    src={character.avatar}
+                                    alt={character.name}
+                                    className="w-16 h-16 rounded-2xl object-cover shadow-md group-hover:scale-105 transition-transform"
+                                  />
+                                  <button
+                                    onClick={() => setChattingCharacter(character)}
+                                    className="absolute -bottom-2 -right-2 w-8 h-8 bg-gradient-to-br from-primary-500 to-purple-600 text-white rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
+                                  >
+                                    <MessageSquare className="w-4 h-4" />
+                                  </button>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <h3 className="text-lg font-bold text-gray-900 truncate">
+                                      {character.name}
+                                    </h3>
+                                  </div>
+                                  {character.title && (
+                                    <span className="inline-block text-xs text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full mb-2">
+                                      {character.title}
+                                    </span>
+                                  )}
+                                  <p className="text-sm text-gray-500 line-clamp-2">
+                                    {character.description || '暂无描述'}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="px-5 py-3 bg-gray-50 border-t flex justify-end gap-2">
+                              <button
+                                onClick={() => openEditForm(character)}
+                                className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 hover:text-primary-600 hover:bg-white rounded-lg transition-colors"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                                编辑
+                              </button>
+                              <button
+                                onClick={() => handleDeleteCharacter(character.id)}
+                                className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 hover:text-red-600 hover:bg-white rounded-lg transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                删除
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  </div>
-                  <div className="px-5 py-3 bg-gray-50 border-t flex justify-end gap-2">
-                    <button
-                      onClick={() => openEditForm(character)}
-                      className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 hover:text-primary-600 hover:bg-white rounded-lg transition-colors"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                      编辑
-                    </button>
-                    <button
-                      onClick={() => handleDeleteCharacter(character.id)}
-                      className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 hover:text-red-600 hover:bg-white rounded-lg transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      删除
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                  ))}
+              </div>
+            )}
           </>
         )}
       </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Users } from 'lucide-react';
 import { useCharacters } from '@/hooks/useCharacters';
 import { CharacterCard } from '@/components/CharacterCard';
@@ -8,11 +8,36 @@ import { CharacterForm } from '@/components/CharacterForm';
 import { ChatInterface } from '@/components/ChatInterface';
 import { Character } from '@/types/character';
 
+interface AppSettings {
+  apiKey: string;
+  apiBaseURL: string;
+  apiModel: string;
+}
+
+const DEFAULT_SETTINGS: AppSettings = {
+  apiKey: '',
+  apiBaseURL: 'https://api.openai.com/v1',
+  apiModel: 'gpt-3.5-turbo',
+};
+
 export default function Home() {
   const { characters, isLoaded, addCharacter, updateCharacter, deleteCharacter, getCharacter } = useCharacters();
   const [showForm, setShowForm] = useState(false);
   const [editingCharacter, setEditingCharacter] = useState<Character | undefined>();
   const [chattingCharacter, setChattingCharacter] = useState<Character | undefined>();
+  const [apiSettings, setApiSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('ai_app_settings');
+    if (savedSettings) {
+      const parsed = JSON.parse(savedSettings);
+      setApiSettings({
+        apiKey: parsed.apiKey || '',
+        apiBaseURL: parsed.apiBaseURL || 'https://api.openai.com/v1',
+        apiModel: parsed.apiModel || 'gpt-3.5-turbo',
+      });
+    }
+  }, []);
 
   const handleAddCharacter = (characterData: Omit<Character, 'id' | 'createdAt' | 'updatedAt'>) => {
     addCharacter(characterData);
@@ -115,6 +140,7 @@ export default function Home() {
           character={editingCharacter}
           onSave={editingCharacter ? handleUpdateCharacter : handleAddCharacter}
           onCancel={closeForm}
+          apiSettings={apiSettings}
         />
       )}
 

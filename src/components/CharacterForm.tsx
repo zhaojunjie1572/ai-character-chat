@@ -2,12 +2,18 @@
 
 import { useState, useRef } from 'react';
 import { Character } from '@/types/character';
-import { X, Upload, User } from 'lucide-react';
+import { X, Upload, User, Sparkles, Loader2, Wand2 } from 'lucide-react';
+import { generateCharacter, getAvatarForCharacter, GeneratedCharacter } from '@/lib/characterGenerator';
 
 interface CharacterFormProps {
   character?: Character;
   onSave: (character: Omit<Character, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onCancel: () => void;
+  apiSettings?: {
+    apiKey: string;
+    apiBaseURL: string;
+    apiModel: string;
+  };
 }
 
 const PRESET_AVATARS = [
@@ -50,13 +56,17 @@ const ZHUGE_LIANG_TEMPLATE = `【核心指令】
 
 你是有血有肉、会思考、有情绪、有执念、有软肋、有烟火气的活人智能体。`;
 
-export function CharacterForm({ character, onSave, onCancel }: CharacterFormProps) {
+export function CharacterForm({ character, onSave, onCancel, apiSettings }: CharacterFormProps) {
   const [name, setName] = useState(character?.name || '');
   const [title, setTitle] = useState(character?.title || '');
   const [description, setDescription] = useState(character?.description || '');
   const [systemPrompt, setSystemPrompt] = useState(character?.systemPrompt || '');
   const [avatar, setAvatar] = useState(character?.avatar || PRESET_AVATARS[0]);
   const [customAvatar, setCustomAvatar] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState('');
+  const [showAIGenerator, setShowAIGenerator] = useState(false);
+  const [aiNameInput, setAiNameInput] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -90,6 +100,46 @@ export function CharacterForm({ character, onSave, onCancel }: CharacterFormProp
     if (!description) setDescription('三国时期蜀汉丞相，杰出的政治家、军事家、文学家');
   };
 
+  const handleAIGenerate = async () => {
+    if (!aiNameInput.trim()) {
+      setGenerateError('请输入人物名称');
+      return;
+    }
+
+    if (!apiSettings?.apiKey) {
+      setGenerateError('请先配置 API 密钥');
+      return;
+    }
+
+    setIsGenerating(true);
+    setGenerateError('');
+
+    try {
+      const generated = await generateCharacter(
+        aiNameInput.trim(),
+        apiSettings.apiKey,
+        apiSettings.apiBaseURL,
+        apiSettings.apiModel
+      );
+
+      if (generated) {
+        setName(generated.name);
+        setTitle(generated.title);
+        setDescription(generated.description);
+        setSystemPrompt(generated.systemPrompt);
+        setAvatar(getAvatarForCharacter(generated.name));
+        setShowAIGenerator(false);
+        setAiNameInput('');
+      } else {
+        setGenerateError('生成失败，请检查 API 配置或稍后重试');
+      }
+    } catch (error) {
+      setGenerateError('生成过程中出现错误');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -106,6 +156,82 @@ export function CharacterForm({ character, onSave, onCancel }: CharacterFormProp
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* AI 生成按钮 */}
+          {!character && (
+            <div className="bg-gradient-to-r from-primary-50 to-purple-50 border border-primary-200 rounded-xl p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-primary-600" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-gray-900">AI 自动生成角色</h3>
+                  <p className="text-sm text-gray-500">输入人物名称，AI 会自动生成完整的角色设定</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAIGenerator(true)}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
+                >
+                  <Wand2 className="w-4 h-4" />
+                  开始生成
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* AI 生成弹窗 */}
+          {showAIGenerator && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60]">
+              <div className="bg-white rounded-2xl w-full max-w-md p-6">
+                <h3 className="text-xl font-bold mb-4">AI 生成角色</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  输入你想创建的人物名称，例如：马云、罗翔、李白、乔布斯等
+                </p>
+                <input
+                  type="text"
+                  value={aiNameInput}
+                  onChange={(e) => setAiNameInput(e.target.value)}
+                  placeholder="输入人物名称..."
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-4"
+                />
+                {generateError && (
+                  <p className="text-sm text-red-600 mb-4">{generateError}</p>
+                )}
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAIGenerator(false);
+                      setGenerateError('');
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    disabled={isGenerating}
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAIGenerate}
+                    disabled={isGenerating || !aiNameInput.trim()}
+                    className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        生成中...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        生成
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* 头像选择 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">

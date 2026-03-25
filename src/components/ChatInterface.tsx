@@ -67,14 +67,14 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
 
   // 初始化语音识别
   useEffect(() => {
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
+    const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognitionAPI) {
+      recognitionRef.current = new SpeechRecognitionAPI();
       recognitionRef.current.continuous = false;
       recognitionRef.current.interimResults = false;
       recognitionRef.current.lang = 'zh-CN';
       
-      recognitionRef.current.onresult = (event) => {
+      recognitionRef.current.onresult = (event: any) => {
         const transcript = event.results[0][0].transcript;
         setInput(prev => prev + transcript);
         setIsListening(false);

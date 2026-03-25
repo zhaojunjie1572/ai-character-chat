@@ -2,7 +2,7 @@
 const pinyinMap: Record<string, string> = {
   '阿': 'a', '艾': 'ai', '安': 'an', '奥': 'ao',
   '巴': 'ba', '白': 'bai', '班': 'ban', '包': 'bao', '贝': 'bei', '本': 'ben', '比': 'bi', '边': 'bian', '表': 'biao', '别': 'bie', '宾': 'bin', '波': 'bo', '布': 'bu',
-  '蔡': 'cai', '曹': 'cao', '岑': 'cen', '曾': 'ceng', '查': 'cha', '柴': 'chai', '常': 'chang', '陈': 'chen', '成': 'cheng', '池': 'chi', '迟': 'chi', '楚': 'chu', '褚': 'chu', '崔': 'cui',
+  '蔡': 'cai', '曹': 'cao', '岑': 'cen', '柴': 'chai', '常': 'chang', '陈': 'chen', '成': 'cheng', '池': 'chi', '迟': 'chi', '楚': 'chu', '褚': 'chu', '崔': 'cui',
   '达': 'da', '戴': 'dai', '丹': 'dan', '邓': 'deng', '迪': 'di', '丁': 'ding', '董': 'dong', '杜': 'du', '段': 'duan',
   '鄂': 'e', '恩': 'en',
   '范': 'fan', '方': 'fang', '冯': 'feng', '符': 'fu', '福': 'fu', '傅': 'fu',
@@ -22,7 +22,7 @@ const pinyinMap: Record<string, string> = {
   '万': 'wan', '汪': 'wang', '王': 'wang', '韦': 'wei', '卫': 'wei', '魏': 'wei', '温': 'wen', '文': 'wen', '闻': 'wen', '翁': 'weng', '乌': 'wu', '巫': 'wu', '吴': 'wu', '武': 'wu', '伍': 'wu',
   '西': 'xi', '席': 'xi', '夏': 'xia', '鲜': 'xian', '咸': 'xian', '相': 'xiang', '项': 'xiang', '萧': 'xiao', '肖': 'xiao', '谢': 'xie', '辛': 'xin', '邢': 'xing', '熊': 'xiong', '徐': 'xu', '许': 'xu', '宣': 'xuan', '薛': 'xue',
   '牙': 'ya', '严': 'yan', '颜': 'yan', '阎': 'yan', '杨': 'yang', '阳': 'yang', '姚': 'yao', '叶': 'ye', '伊': 'yi', '易': 'yi', '殷': 'yin', '尹': 'yin', '应': 'ying', '尤': 'you', '于': 'yu', '余': 'yu', '俞': 'yu', '虞': 'yu', '宇': 'yu', '羽': 'yu', '郁': 'yu', '喻': 'yu', '元': 'yuan', '袁': 'yuan', '岳': 'yue', '云': 'yun',
-  '宰': 'zai', '臧': 'zang', '曾': 'zeng', '查': 'zha', '翟': 'zhai', '詹': 'zhan', '张': 'zhang', '章': 'zhang', '赵': 'zhao', '甄': 'zhen', '郑': 'zheng', '支': 'zhi', '钟': 'zhong', '周': 'zhou', '朱': 'zhu', '诸': 'zhu', '诸葛': 'zhuge', '祝': 'zhu', '庄': 'zhuang', '卓': 'zhuo', '宗': 'zong', '邹': 'zou', '祖': 'zu',
+  '宰': 'zai', '臧': 'zang', '曾': 'zeng', '查': 'zha', '翟': 'zhai', '詹': 'zhan', '张': 'zhang', '章': 'zhang', '赵': 'zhao', '甄': 'zhen', '郑': 'zheng', '支': 'zhi', '钟': 'zhong', '周': 'zhou', '朱': 'zhu', '诸': 'zhu', '祝': 'zhu', '庄': 'zhuang', '卓': 'zhuo', '宗': 'zong', '邹': 'zou', '祖': 'zu',
 };
 
 // 获取汉字的首字母

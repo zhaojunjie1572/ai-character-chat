@@ -108,7 +108,7 @@ export default function Home() {
       
       const data = gistSyncService.prepareSyncData(characters, apiSettings);
       
-      let gistId = apiSettings.gistId;
+      let gistId: string | null = apiSettings.gistId;
       if (!gistId) {
         // 创建新 Gist
         gistId = await gistSyncService.createGist(data);

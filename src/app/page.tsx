@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Users, Settings, Key, Sparkles, MessageSquare, Trash2, Edit3 } from 'lucide-react';
+import { Plus, Users, Settings, Key, Sparkles, MessageSquare, Trash2, Edit3, Volume2 } from 'lucide-react';
 import { useCharacters } from '@/hooks/useCharacters';
 import { CharacterCard } from '@/components/CharacterCard';
 import { CharacterForm } from '@/components/CharacterForm';
@@ -12,12 +12,27 @@ interface AppSettings {
   apiKey: string;
   apiBaseURL: string;
   apiModel: string;
+  voiceEnabled: boolean;
+  voiceInputEnabled: boolean;
+  backgroundImage: string;
+  // 语音设置
+  voiceURI: string;
+  voiceVolume: number;
+  voiceRate: number;
+  voicePitch: number;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
   apiKey: '',
   apiBaseURL: 'https://api.openai.com/v1',
   apiModel: 'gpt-3.5-turbo',
+  voiceEnabled: false,
+  voiceInputEnabled: false,
+  backgroundImage: '',
+  voiceURI: '',
+  voiceVolume: 1,
+  voiceRate: 1,
+  voicePitch: 1,
 };
 
 export default function Home() {
@@ -29,29 +44,30 @@ export default function Home() {
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [tempApiSettings, setTempApiSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
 
   useEffect(() => {
     const savedSettings = localStorage.getItem('ai_app_settings');
     if (savedSettings) {
       const parsed = JSON.parse(savedSettings);
-      const settings = {
-        apiKey: parsed.apiKey || '',
-        apiBaseURL: parsed.apiBaseURL || 'https://api.openai.com/v1',
-        apiModel: parsed.apiModel || 'gpt-3.5-turbo',
-      };
-      setApiSettings(settings);
-      setTempApiSettings(settings);
+      setApiSettings({ ...DEFAULT_SETTINGS, ...parsed });
+      setTempApiSettings({ ...DEFAULT_SETTINGS, ...parsed });
     }
+
+    // 加载可用语音
+    const loadVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      // 过滤中文语音
+      const chineseVoices = voices.filter(v => v.lang.includes('zh'));
+      setAvailableVoices(chineseVoices.length > 0 ? chineseVoices : voices);
+    };
+
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
   }, []);
 
   const handleSaveApiSettings = () => {
-    const fullSettings = {
-      ...tempApiSettings,
-      voiceEnabled: false,
-      voiceInputEnabled: false,
-      backgroundImage: '',
-    };
-    localStorage.setItem('ai_app_settings', JSON.stringify(fullSettings));
+    localStorage.setItem('ai_app_settings', JSON.stringify(tempApiSettings));
     setApiSettings(tempApiSettings);
     setShowApiSettings(false);
     setSaveSuccess(true);
@@ -278,15 +294,15 @@ export default function Home() {
       {/* API设置弹窗 */}
       {showApiSettings && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
+          <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
                   <Key className="w-5 h-5 text-primary-600" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold">API 配置</h3>
-                  <p className="text-sm text-gray-500">配置你的 AI 服务</p>
+                  <h3 className="text-xl font-bold">系统配置</h3>
+                  <p className="text-sm text-gray-500">配置 API 和语音设置</p>
                 </div>
               </div>
               <button
@@ -297,47 +313,162 @@ export default function Home() {
               </button>
             </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  API 密钥 *
-                </label>
-                <input
-                  type="password"
-                  value={tempApiSettings.apiKey}
-                  onChange={(e) => setTempApiSettings({ ...tempApiSettings, apiKey: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="sk-..."
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  你的 OpenAI API 密钥或其他兼容服务的密钥
-                </p>
+            <div className="space-y-6">
+              {/* API 配置 */}
+              <div className="space-y-4">
+                <h4 className="font-semibold text-gray-900 border-b pb-2">API 配置</h4>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    API 密钥 *
+                  </label>
+                  <input
+                    type="password"
+                    value={tempApiSettings.apiKey}
+                    onChange={(e) => setTempApiSettings({ ...tempApiSettings, apiKey: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="sk-..."
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    你的 OpenAI API 密钥或其他兼容服务的密钥
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    API 基础 URL
+                  </label>
+                  <input
+                    type="text"
+                    value={tempApiSettings.apiBaseURL}
+                    onChange={(e) => setTempApiSettings({ ...tempApiSettings, apiBaseURL: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="https://api.openai.com/v1"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    模型
+                  </label>
+                  <input
+                    type="text"
+                    value={tempApiSettings.apiModel}
+                    onChange={(e) => setTempApiSettings({ ...tempApiSettings, apiModel: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="gpt-3.5-turbo"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  API 基础 URL
-                </label>
-                <input
-                  type="text"
-                  value={tempApiSettings.apiBaseURL}
-                  onChange={(e) => setTempApiSettings({ ...tempApiSettings, apiBaseURL: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="https://api.openai.com/v1"
-                />
-              </div>
+              {/* 语音配置 */}
+              <div className="space-y-4">
+                <h4 className="font-semibold text-gray-900 border-b pb-2 flex items-center gap-2">
+                  <Volume2 className="w-4 h-4" />
+                  语音配置
+                </h4>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  模型
-                </label>
-                <input
-                  type="text"
-                  value={tempApiSettings.apiModel}
-                  onChange={(e) => setTempApiSettings({ ...tempApiSettings, apiModel: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="gpt-3.5-turbo"
-                />
+                {/* 声音选择 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    选择声音
+                  </label>
+                  <select
+                    value={tempApiSettings.voiceURI}
+                    onChange={(e) => setTempApiSettings({ ...tempApiSettings, voiceURI: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  >
+                    <option value="">使用系统默认</option>
+                    {availableVoices.map((voice) => (
+                      <option key={voice.voiceURI} value={voice.voiceURI}>
+                        {voice.name} ({voice.lang}) {voice.localService ? '[本地]' : '[网络]'}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    选择朗读时使用的声音，支持本地和网络语音
+                  </p>
+                </div>
+
+                {/* 音量 */}
+                <div>
+                  <div className="flex justify-between mb-2">
+                    <label className="text-sm font-medium text-gray-700">音量</label>
+                    <span className="text-sm text-gray-500">{Math.round(tempApiSettings.voiceVolume * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={tempApiSettings.voiceVolume}
+                    onChange={(e) => setTempApiSettings({ ...tempApiSettings, voiceVolume: parseFloat(e.target.value) })}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500"
+                  />
+                </div>
+
+                {/* 语速 */}
+                <div>
+                  <div className="flex justify-between mb-2">
+                    <label className="text-sm font-medium text-gray-700">语速</label>
+                    <span className="text-sm text-gray-500">{tempApiSettings.voiceRate}x</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="2"
+                    step="0.1"
+                    value={tempApiSettings.voiceRate}
+                    onChange={(e) => setTempApiSettings({ ...tempApiSettings, voiceRate: parseFloat(e.target.value) })}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500"
+                  />
+                  <div className="flex justify-between text-xs text-gray-400 mt-1">
+                    <span>慢</span>
+                    <span>正常</span>
+                    <span>快</span>
+                  </div>
+                </div>
+
+                {/* 音调 */}
+                <div>
+                  <div className="flex justify-between mb-2">
+                    <label className="text-sm font-medium text-gray-700">音调</label>
+                    <span className="text-sm text-gray-500">{tempApiSettings.voicePitch}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="2"
+                    step="0.1"
+                    value={tempApiSettings.voicePitch}
+                    onChange={(e) => setTempApiSettings({ ...tempApiSettings, voicePitch: parseFloat(e.target.value) })}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500"
+                  />
+                  <div className="flex justify-between text-xs text-gray-400 mt-1">
+                    <span>低</span>
+                    <span>正常</span>
+                    <span>高</span>
+                  </div>
+                </div>
+
+                {/* 测试按钮 */}
+                <button
+                  onClick={() => {
+                    const utterance = new SpeechSynthesisUtterance('这是一段测试语音，您可以调整音量、语速和音调。');
+                    utterance.lang = 'zh-CN';
+                    utterance.volume = tempApiSettings.voiceVolume;
+                    utterance.rate = tempApiSettings.voiceRate;
+                    utterance.pitch = tempApiSettings.voicePitch;
+                    if (tempApiSettings.voiceURI) {
+                      const voice = availableVoices.find(v => v.voiceURI === tempApiSettings.voiceURI);
+                      if (voice) utterance.voice = voice;
+                    }
+                    window.speechSynthesis.speak(utterance);
+                  }}
+                  className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  <Volume2 className="w-4 h-4" />
+                  测试语音
+                </button>
               </div>
 
               <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-600">

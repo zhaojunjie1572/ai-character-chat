@@ -19,6 +19,11 @@ interface AppSettings {
   voiceEnabled: boolean;
   voiceInputEnabled: boolean;
   backgroundImage: string;
+  // 语音设置
+  voiceURI: string;
+  voiceVolume: number;
+  voiceRate: number;
+  voicePitch: number;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -28,6 +33,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   voiceEnabled: false,
   voiceInputEnabled: false,
   backgroundImage: '',
+  voiceURI: '',
+  voiceVolume: 1,
+  voiceRate: 1,
+  voicePitch: 1,
 };
 
 export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
@@ -117,14 +126,49 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
     }
   };
 
+  // 清理文本用于朗读：移除符号但保留停顿
+  const cleanTextForSpeech = (text: string): string => {
+    return text
+      // 保留标点符号用于停顿，但移除其他特殊符号
+      .replace(/[*#`\[\](){}|<>\-_=+~@#$%^&]/g, '')
+      // 将多个换行转换为空格
+      .replace(/\n+/g, ' ')
+      // 将多个空格合并为一个
+      .replace(/\s+/g, ' ')
+      // 移除URL
+      .replace(/https?:\/\/\S+/g, '')
+      // 移除Markdown链接格式，保留文本
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      // 移除Markdown强调符号但保留文字
+      .replace(/(\*\*|__)(.+?)\1/g, '$2')
+      .replace(/(\*|_)(.+?)\1/g, '$2')
+      .trim();
+  };
+
   const speakMessage = (text: string) => {
     if (!settings.voiceEnabled) return;
     
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
+    
+    // 清理文本
+    const cleanedText = cleanTextForSpeech(text);
+    
+    const utterance = new SpeechSynthesisUtterance(cleanedText);
     utterance.lang = 'zh-CN';
-    utterance.rate = 1;
-    utterance.pitch = 1;
+    
+    // 应用用户设置的语音参数
+    utterance.volume = settings.voiceVolume ?? 1;
+    utterance.rate = settings.voiceRate ?? 1;
+    utterance.pitch = settings.voicePitch ?? 1;
+    
+    // 设置选定的声音
+    if (settings.voiceURI) {
+      const voices = window.speechSynthesis.getVoices();
+      const selectedVoice = voices.find(v => v.voiceURI === settings.voiceURI);
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
+    }
     
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);

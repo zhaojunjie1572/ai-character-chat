@@ -2,8 +2,9 @@
 
 import { useState, useRef } from 'react';
 import { Character } from '@/types/character';
-import { X, Upload, User, Sparkles, Loader2, Wand2 } from 'lucide-react';
+import { X, Upload, User, Sparkles, Loader2, Wand2, Camera } from 'lucide-react';
 import { generateCharacter, getAvatarForCharacter, GeneratedCharacter } from '@/lib/characterGenerator';
+import { AvatarMaker } from './AvatarMaker';
 
 interface CharacterFormProps {
   character?: Character;
@@ -67,6 +68,7 @@ export function CharacterForm({ character, onSave, onCancel, apiSettings }: Char
   const [generateError, setGenerateError] = useState('');
   const [showAIGenerator, setShowAIGenerator] = useState(false);
   const [aiNameInput, setAiNameInput] = useState('');
+  const [showAvatarMaker, setShowAvatarMaker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -263,6 +265,14 @@ export function CharacterForm({ character, onSave, onCancel, apiSettings }: Char
                   <Upload className="w-6 h-6 text-gray-400" />
                 )}
               </button>
+              <button
+                type="button"
+                onClick={() => setShowAvatarMaker(true)}
+                className="w-16 h-16 rounded-full border-2 border-dashed border-purple-300 hover:border-purple-400 flex items-center justify-center transition-all bg-purple-50"
+                title="制作头像"
+              >
+                <Camera className="w-6 h-6 text-purple-500" />
+              </button>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -271,7 +281,22 @@ export function CharacterForm({ character, onSave, onCancel, apiSettings }: Char
                 className="hidden"
               />
             </div>
+            <p className="text-xs text-gray-500">
+              点击相机图标可以上传图片并裁剪制作头像，支持缩放、旋转和拖动调整
+            </p>
           </div>
+
+          {/* 头像制作弹窗 */}
+          {showAvatarMaker && (
+            <AvatarMaker
+              onSave={(avatarUrl) => {
+                setCustomAvatar(avatarUrl);
+                setAvatar(avatarUrl);
+                setShowAvatarMaker(false);
+              }}
+              onCancel={() => setShowAvatarMaker(false)}
+            />
+          )}
 
           {/* 基本信息 */}
           <div className="grid grid-cols-2 gap-4">

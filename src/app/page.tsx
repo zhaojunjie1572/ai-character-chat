@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Users, Settings, Key, Sparkles, MessageSquare, Trash2, Edit3, Volume2 } from 'lucide-react';
+import { Plus, Users, Settings, Key, Sparkles, MessageSquare, Trash2, Edit3, Volume2, Cloud, Download, Upload, RefreshCw, Check, AlertCircle } from 'lucide-react';
 import { useCharacters } from '@/hooks/useCharacters';
 import { CharacterCard } from '@/components/CharacterCard';
 import { CharacterForm } from '@/components/CharacterForm';
 import { ChatInterface } from '@/components/ChatInterface';
 import { Character } from '@/types/character';
+import { gistSyncService, SyncData } from '@/lib/gistSync';
 
 interface AppSettings {
   apiKey: string;
@@ -20,6 +21,9 @@ interface AppSettings {
   voiceVolume: number;
   voiceRate: number;
   voicePitch: number;
+  // Gist 同步设置
+  gistToken: string;
+  gistId: string;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -33,10 +37,12 @@ const DEFAULT_SETTINGS: AppSettings = {
   voiceVolume: 1,
   voiceRate: 1,
   voicePitch: 1,
+  gistToken: '',
+  gistId: '',
 };
 
 export default function Home() {
-  const { characters, isLoaded, addCharacter, updateCharacter, deleteCharacter } = useCharacters();
+  const { characters, isLoaded, addCharacter, updateCharacter, deleteCharacter, getCharacters } = useCharacters();
   const [showForm, setShowForm] = useState(false);
   const [editingCharacter, setEditingCharacter] = useState<Character | undefined>();
   const [chattingCharacter, setChattingCharacter] = useState<Character | undefined>();
@@ -45,19 +51,25 @@ export default function Home() {
   const [tempApiSettings, setTempApiSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  
+  // Gist 同步状态
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
+  const [syncError, setSyncError] = useState('');
+  const [showGistSetup, setShowGistSetup] = useState(false);
 
   useEffect(() => {
     const savedSettings = localStorage.getItem('ai_app_settings');
     if (savedSettings) {
       const parsed = JSON.parse(savedSettings);
-      setApiSettings({ ...DEFAULT_SETTINGS, ...parsed });
-      setTempApiSettings({ ...DEFAULT_SETTINGS, ...parsed });
+      const settings = { ...DEFAULT_SETTINGS, ...parsed };
+      setApiSettings(settings);
+      setTempApiSettings(settings);
     }
 
     // 加载可用语音
     const loadVoices = () => {
       const voices = window.speechSynthesis.getVoices();
-      // 过滤中文语音
       const chineseVoices = voices.filter(v => v.lang.includes('zh'));
       setAvailableVoices(chineseVoices.length > 0 ? chineseVoices : voices);
     };
@@ -72,6 +84,173 @@ export default function Home() {
     setShowApiSettings(false);
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 2000);
+  };
+
+  // 同步到 Gist
+  const handleSyncToGist = async () => {
+    if (!apiSettings.gistToken) {
+      setSyncError('请先配置 GitHub Token');
+      setShowGistSetup(true);
+      return;
+    }
+
+    setIsSyncing(true);
+    setSyncError('');
+    setSyncMessage('');
+
+    try {
+      gistSyncService.setConfig(apiSettings.gistToken, apiSettings.gistId);
+      
+      const data = gistSyncService.prepareSyncData(characters, apiSettings);
+      
+      let gistId = apiSettings.gistId;
+      if (!gistId) {
+        // 创建新 Gist
+        gistId = await gistSyncService.createGist(data);
+        if (gistId) {
+          const newSettings = { ...apiSettings, gistId };
+          setApiSettings(newSettings);
+          setTempApiSettings(newSettings);
+          localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
+        }
+      } else {
+        // 更新现有 Gist
+        await gistSyncService.updateGist(data);
+      }
+
+      if (gistId) {
+        setSyncMessage('同步成功！数据已保存到 GitHub Gist');
+        setTimeout(() => setSyncMessage(''), 3000);
+      } else {
+        setSyncError('同步失败，请检查 Token 是否有效');
+      }
+    } catch (error) {
+      setSyncError('同步过程中出现错误');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // 从 Gist 恢复
+  const handleRestoreFromGist = async () => {
+    if (!apiSettings.gistToken || !apiSettings.gistId) {
+      setSyncError('请先配置 GitHub Token 和 Gist ID');
+      setShowGistSetup(true);
+      return;
+    }
+
+    setIsSyncing(true);
+    setSyncError('');
+    setSyncMessage('');
+
+    try {
+      gistSyncService.setConfig(apiSettings.gistToken, apiSettings.gistId);
+      const data = await gistSyncService.fetchGist();
+
+      if (data) {
+        // 恢复角色
+        if (data.characters && data.characters.length > 0) {
+          if (confirm(`找到 ${data.characters.length} 个角色，是否恢复？这将覆盖本地现有角色。`)) {
+            // 清除现有角色并恢复
+            characters.forEach(c => deleteCharacter(c.id));
+            data.characters.forEach((c: Character) => {
+              addCharacter({
+                name: c.name,
+                title: c.title,
+                description: c.description,
+                avatar: c.avatar,
+                systemPrompt: c.systemPrompt,
+              });
+            });
+          }
+        }
+
+        // 恢复设置（保留 API Key）
+        if (data.settings) {
+          const newSettings = {
+            ...apiSettings,
+            ...data.settings,
+            apiKey: apiSettings.apiKey, // 保留本地 API Key
+            gistToken: apiSettings.gistToken,
+            gistId: apiSettings.gistId,
+          };
+          setApiSettings(newSettings);
+          setTempApiSettings(newSettings);
+          localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
+        }
+
+        setSyncMessage('恢复成功！数据已从 GitHub Gist 恢复');
+        setTimeout(() => setSyncMessage(''), 3000);
+      } else {
+        setSyncError('恢复失败，请检查 Gist ID 是否正确');
+      }
+    } catch (error) {
+      setSyncError('恢复过程中出现错误');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // 导出数据到文件
+  const handleExport = () => {
+    const data = gistSyncService.exportFullData(characters, apiSettings);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ai-character-chat-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setSyncMessage('导出成功！');
+    setTimeout(() => setSyncMessage(''), 3000);
+  };
+
+  // 从文件导入
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      const data = gistSyncService.importData(content);
+
+      if (data) {
+        if (confirm(`找到 ${data.characters.length} 个角色，是否导入？`)) {
+          // 导入角色
+          data.characters.forEach((c: Character) => {
+            addCharacter({
+              name: c.name,
+              title: c.title,
+              description: c.description,
+              avatar: c.avatar,
+              systemPrompt: c.systemPrompt,
+            });
+          });
+
+          // 导入设置（保留敏感信息）
+          if (data.settings) {
+            const newSettings = {
+              ...apiSettings,
+              ...data.settings,
+              apiKey: data.settings.apiKey || apiSettings.apiKey,
+            };
+            setApiSettings(newSettings);
+            setTempApiSettings(newSettings);
+            localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
+          }
+
+          setSyncMessage('导入成功！');
+          setTimeout(() => setSyncMessage(''), 3000);
+        }
+      } else {
+        setSyncError('文件格式不正确');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   const handleAddCharacter = (characterData: Omit<Character, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -103,6 +282,7 @@ export default function Home() {
   };
 
   const hasApiKey = !!apiSettings.apiKey;
+  const hasGistConfig = !!apiSettings.gistToken;
 
   if (!isLoaded) {
     return (
@@ -130,6 +310,22 @@ export default function Home() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {/* 同步按钮 */}
+              {hasGistConfig && (
+                <button
+                  onClick={handleSyncToGist}
+                  disabled={isSyncing}
+                  className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-all disabled:opacity-50"
+                  title="同步到云端"
+                >
+                  {isSyncing ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Cloud className="w-4 h-4" />
+                  )}
+                  <span className="hidden sm:inline text-sm font-medium">同步</span>
+                </button>
+              )}
               <button
                 onClick={() => setShowApiSettings(true)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
@@ -154,6 +350,24 @@ export default function Home() {
           </div>
         </div>
       </header>
+
+      {/* 同步状态提示 */}
+      {(syncMessage || syncError) && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+          {syncMessage && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+              <Check className="w-5 h-5 text-green-600" />
+              <p className="text-green-700">{syncMessage}</p>
+            </div>
+          )}
+          {syncError && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600" />
+              <p className="text-red-700">{syncError}</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* API配置提示 */}
       {!hasApiKey && (
@@ -294,7 +508,7 @@ export default function Home() {
       {/* API设置弹窗 */}
       {showApiSettings && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl w-full max-w-2xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
@@ -302,7 +516,7 @@ export default function Home() {
                 </div>
                 <div>
                   <h3 className="text-xl font-bold">系统配置</h3>
-                  <p className="text-sm text-gray-500">配置 API 和语音设置</p>
+                  <p className="text-sm text-gray-500">配置 API、语音和同步</p>
                 </div>
               </div>
               <button
@@ -328,9 +542,6 @@ export default function Home() {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                     placeholder="sk-..."
                   />
-                  <p className="mt-1 text-xs text-gray-500">
-                    你的 OpenAI API 密钥或其他兼容服务的密钥
-                  </p>
                 </div>
 
                 <div>
@@ -360,6 +571,101 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* 云端同步配置 */}
+              <div className="space-y-4">
+                <h4 className="font-semibold text-gray-900 border-b pb-2 flex items-center gap-2">
+                  <Cloud className="w-4 h-4" />
+                  云端同步 (GitHub Gist)
+                </h4>
+                
+                <div className="bg-blue-50 rounded-lg p-3 text-sm text-blue-700">
+                  <p>使用 GitHub Gist 实现多端数据同步。配置后可以将角色和设置同步到云端，在其他设备上恢复。</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    GitHub Personal Access Token
+                  </label>
+                  <input
+                    type="password"
+                    value={tempApiSettings.gistToken}
+                    onChange={(e) => setTempApiSettings({ ...tempApiSettings, gistToken: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="ghp_..."
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    在 GitHub Settings → Developer settings → Personal access tokens 中创建，需要 gist 权限
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Gist ID (可选)
+                  </label>
+                  <input
+                    type="text"
+                    value={tempApiSettings.gistId}
+                    onChange={(e) => setTempApiSettings({ ...tempApiSettings, gistId: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="留空将自动创建新的 Gist"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    如果已有 Gist ID，可以输入以恢复数据；留空将创建新的 Gist
+                  </p>
+                </div>
+
+                {/* 同步操作按钮 */}
+                {tempApiSettings.gistToken && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSyncToGist}
+                      disabled={isSyncing}
+                      className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {isSyncing ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Upload className="w-4 h-4" />
+                      )}
+                      同步到云端
+                    </button>
+                    <button
+                      onClick={handleRestoreFromGist}
+                      disabled={isSyncing}
+                      className="flex-1 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      <Download className="w-4 h-4" />
+                      从云端恢复
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* 数据导入导出 */}
+              <div className="space-y-4">
+                <h4 className="font-semibold text-gray-900 border-b pb-2">数据备份</h4>
+                
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleExport}
+                    className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    导出备份
+                  </button>
+                  <label className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer">
+                    <Upload className="w-4 h-4" />
+                    导入备份
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={handleImport}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+
               {/* 语音配置 */}
               <div className="space-y-4">
                 <h4 className="font-semibold text-gray-900 border-b pb-2 flex items-center gap-2">
@@ -367,7 +673,6 @@ export default function Home() {
                   语音配置
                 </h4>
 
-                {/* 声音选择 */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     选择声音
@@ -384,12 +689,8 @@ export default function Home() {
                       </option>
                     ))}
                   </select>
-                  <p className="mt-1 text-xs text-gray-500">
-                    选择朗读时使用的声音，支持本地和网络语音
-                  </p>
                 </div>
 
-                {/* 音量 */}
                 <div>
                   <div className="flex justify-between mb-2">
                     <label className="text-sm font-medium text-gray-700">音量</label>
@@ -406,7 +707,6 @@ export default function Home() {
                   />
                 </div>
 
-                {/* 语速 */}
                 <div>
                   <div className="flex justify-between mb-2">
                     <label className="text-sm font-medium text-gray-700">语速</label>
@@ -421,14 +721,8 @@ export default function Home() {
                     onChange={(e) => setTempApiSettings({ ...tempApiSettings, voiceRate: parseFloat(e.target.value) })}
                     className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500"
                   />
-                  <div className="flex justify-between text-xs text-gray-400 mt-1">
-                    <span>慢</span>
-                    <span>正常</span>
-                    <span>快</span>
-                  </div>
                 </div>
 
-                {/* 音调 */}
                 <div>
                   <div className="flex justify-between mb-2">
                     <label className="text-sm font-medium text-gray-700">音调</label>
@@ -443,14 +737,8 @@ export default function Home() {
                     onChange={(e) => setTempApiSettings({ ...tempApiSettings, voicePitch: parseFloat(e.target.value) })}
                     className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500"
                   />
-                  <div className="flex justify-between text-xs text-gray-400 mt-1">
-                    <span>低</span>
-                    <span>正常</span>
-                    <span>高</span>
-                  </div>
                 </div>
 
-                {/* 测试按钮 */}
                 <button
                   onClick={() => {
                     const utterance = new SpeechSynthesisUtterance('这是一段测试语音，您可以调整音量、语速和音调。');
@@ -469,16 +757,6 @@ export default function Home() {
                   <Volume2 className="w-4 h-4" />
                   测试语音
                 </button>
-              </div>
-
-              <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-600">
-                <p className="font-medium mb-1">支持的服务：</p>
-                <ul className="list-disc list-inside space-y-1 text-xs">
-                  <li>OpenAI (GPT-3.5, GPT-4)</li>
-                  <li>Azure OpenAI</li>
-                  <li>Claude (通过代理)</li>
-                  <li>其他兼容 OpenAI API 的服务</li>
-                </ul>
               </div>
             </div>
 

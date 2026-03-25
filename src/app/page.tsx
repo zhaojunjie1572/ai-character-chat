@@ -43,7 +43,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 export default function Home() {
-  const { characters, isLoaded, addCharacter, updateCharacter, deleteCharacter, getCharacters } = useCharacters();
+  const { characters, isLoaded, addCharacter, updateCharacter, deleteCharacter } = useCharacters();
   const [showForm, setShowForm] = useState(false);
   const [editingCharacter, setEditingCharacter] = useState<Character | undefined>();
   const [chattingCharacter, setChattingCharacter] = useState<Character | undefined>();

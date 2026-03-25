@@ -2,17 +2,21 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# 复制所有文件
-COPY . .
+# 先复制 package 文件
+COPY package*.json ./
 
 # 安装依赖
 RUN npm install
 
-# 构建应用
+# 复制源代码
+COPY . .
+
+# 构建
 RUN npm run build
 
-# 暴露端口
+# 安装 serve
+RUN npm install -g serve
+
 EXPOSE 3000
 
-# 启动应用
-CMD ["npx", "serve", "dist", "-l", "3000"]
+CMD ["serve", "dist", "-l", "3000"]

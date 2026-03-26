@@ -841,19 +841,52 @@ ${contextText || '（刚开始讨论）'}
     };
   }, [stormTimeout]);
 
-  const handleExportMeeting = () => {
+  // 保存会议记录到本地存储（应用内保存）
+  const handleSaveMeetingRecord = () => {
     if (!currentMeeting) return;
-    
-    const content = meetingStorage.exportMeeting(currentMeeting.id);
-    const blob = new Blob([content], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `会议记录-${currentMeeting.title}-${new Date().toISOString().split('T')[0]}.md`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+
+    // 会议记录已经实时保存在 storage 中，这里只是给用户一个确认提示
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-20 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 text-sm';
+    toast.textContent = '会议记录已自动保存';
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      document.body.removeChild(toast);
+    }, 2000);
+  };
+
+  // 开始新会议（保留参与者，清空消息）
+  const handleNewMeeting = () => {
+    if (!currentMeeting) return;
+
+    if (currentMeeting.messages.length > 0) {
+      if (!confirm('确定要开始新会议吗？当前会议记录已自动保存。')) {
+        return;
+      }
+    }
+
+    // 清空消息但保留参与者
+    meetingStorage.clearAllMessages(currentMeeting.id);
+
+    // 重置轮数
+    const updatedMeeting = meetingStorage.getMeeting(currentMeeting.id);
+    if (updatedMeeting) {
+      setCurrentMeeting(updatedMeeting);
+    }
+
+    // 停止风暴模式
+    if (stormMode) {
+      stopStormMode();
+    }
+
+    // 显示提示
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-20 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 text-sm';
+    toast.textContent = '新会议已开始';
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      document.body.removeChild(toast);
+    }, 2000);
   };
 
   // 删除单条消息
@@ -924,6 +957,16 @@ ${contextText || '（刚开始讨论）'}
         {currentMeeting && (
           <>
             {/* 风暴模式按钮 */}
+            {/* 新会议按钮 */}
+            <button
+              onClick={handleNewMeeting}
+              className="flex items-center gap-1 px-3 py-1.5 mr-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors"
+              title="开始新会议（保留参与者，清空消息）"
+            >
+              <Plus className="w-4 h-4" />
+              新会议
+            </button>
+
             {!stormMode ? (
               <button
                 onClick={() => {
@@ -945,8 +988,8 @@ ${contextText || '（刚开始讨论）'}
                 <button
                   onClick={toggleStormPause}
                   className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                    stormPaused 
-                      ? 'bg-green-500 text-white hover:bg-green-600' 
+                    stormPaused
+                      ? 'bg-green-500 text-white hover:bg-green-600'
                       : 'bg-yellow-500 text-white hover:bg-yellow-600'
                   }`}
                 >
@@ -962,11 +1005,11 @@ ${contextText || '（刚开始讨论）'}
                 </button>
               </div>
             )}
-            
+
             <button
-              onClick={handleExportMeeting}
+              onClick={handleSaveMeetingRecord}
               className="p-2 hover:bg-gray-200 rounded-full transition-colors mr-1"
-              title="导出会议记录"
+              title="会议记录已自动保存"
             >
               <Download className="w-5 h-5 text-gray-600" />
             </button>

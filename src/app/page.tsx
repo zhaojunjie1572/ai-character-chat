@@ -12,6 +12,7 @@ import { CharacterForm } from '@/components/CharacterForm';
 import { ChatInterface } from '@/components/ChatInterface';
 import { Character } from '@/types/character';
 import { gistSyncService } from '@/lib/gistSync';
+import { storage } from '@/lib/storage';
 import { searchByPinyin } from '@/lib/pinyin';
 
 interface AppSettings {

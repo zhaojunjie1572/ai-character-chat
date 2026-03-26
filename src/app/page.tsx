@@ -202,16 +202,11 @@ export default function Home() {
 
         if (confirm(message)) {
           if (hasCharacters) {
+            // 清空现有角色，但使用原始ID保存新角色，以保持与聊天记录的关联
             characters.forEach(c => deleteCharacter(c.id));
             data.characters.forEach((c: Character) => {
-              addCharacter({
-                name: c.name,
-                title: c.title,
-                description: c.description,
-                avatar: c.avatar,
-                systemPrompt: c.systemPrompt,
-                group: c.group,
-              });
+              // 直接使用 storage.saveCharacter 保留原始 ID
+              storage.saveCharacter(c);
             });
           }
 
@@ -315,14 +310,8 @@ export default function Home() {
 
           if (hasCharacters) {
             data.characters.forEach((c: Character) => {
-              addCharacter({
-                name: c.name,
-                title: c.title,
-                description: c.description,
-                avatar: c.avatar,
-                systemPrompt: c.systemPrompt,
-                group: c.group,
-              });
+              // 直接使用 storage.saveCharacter 保留原始 ID
+              storage.saveCharacter(c);
             });
           }
 

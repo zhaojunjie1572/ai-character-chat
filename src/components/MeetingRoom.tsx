@@ -83,6 +83,9 @@ export function MeetingRoom({ characters, onClose }: MeetingRoomProps) {
   // 显示添加参与者面板
   const [showAddParticipant, setShowAddParticipant] = useState(false);
 
+  // 显示会议记录弹窗
+  const [showMeetingRecord, setShowMeetingRecord] = useState(false);
+
   // 创建表单状态
   const [meetingTitle, setMeetingTitle] = useState('');
   const [meetingTopic, setMeetingTopic] = useState('');
@@ -1007,11 +1010,12 @@ ${contextText || '（刚开始讨论）'}
             )}
 
             <button
-              onClick={handleSaveMeetingRecord}
-              className="p-2 hover:bg-gray-200 rounded-full transition-colors mr-1"
-              title="会议记录已自动保存"
+              onClick={() => setShowMeetingRecord(true)}
+              className="flex items-center gap-1 px-3 py-1.5 mr-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 transition-colors"
+              title="查看会议记录"
             >
-              <Download className="w-5 h-5 text-gray-600" />
+              <Download className="w-4 h-4" />
+              会议记录
             </button>
             
             {/* 清空所有消息按钮 */}
@@ -1110,6 +1114,126 @@ ${contextText || '（刚开始讨论）'}
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* 会议记录弹窗 */}
+      {showMeetingRecord && currentMeeting && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg w-full max-w-3xl max-h-[85vh] flex flex-col">
+            {/* 弹窗头部 */}
+            <div className="flex justify-between items-center p-4 border-b">
+              <div>
+                <h3 className="text-lg font-semibold">会议记录</h3>
+                <p className="text-sm text-gray-500">{currentMeeting.title}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    // 导出为文本
+                    const content = meetingStorage.exportMeeting(currentMeeting.id);
+                    const blob = new Blob([content], { type: 'text/markdown' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `会议记录-${currentMeeting.title}-${new Date().toISOString().split('T')[0]}.md`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  导出
+                </button>
+                <button
+                  onClick={() => setShowMeetingRecord(false)}
+                  className="p-2 hover:bg-gray-100 rounded-full"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* 会议统计 */}
+            <div className="flex items-center gap-6 px-4 py-3 bg-gray-50 border-b text-sm">
+              <span className="text-gray-600">
+                <span className="font-medium text-gray-900">{currentMeeting.messages.length}</span> 条消息
+              </span>
+              <span className="text-gray-600">
+                <span className="font-medium text-gray-900">{currentMeeting.participants.length}</span> 位参与者
+              </span>
+              <span className="text-gray-600">
+                <span className="font-medium text-gray-900">{currentMeeting.currentRound}</span> 轮次
+              </span>
+              <span className="text-gray-600">
+                创建于 {new Date(currentMeeting.createdAt).toLocaleString()}
+              </span>
+            </div>
+
+            {/* 消息列表 */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[60vh]">
+              {currentMeeting.messages.length === 0 ? (
+                <div className="text-center text-gray-500 py-12">
+                  <p>暂无会议记录</p>
+                </div>
+              ) : (
+                currentMeeting.messages.map((message, index) => {
+                  const isUser = message.role === 'user';
+                  const participant = !isUser
+                    ? currentMeeting.participants.find(p => p.characterId === message.characterId)
+                    : null;
+
+                  return (
+                    <div key={message.id} className="flex gap-3">
+                      {/* 头像 */}
+                      <div className="shrink-0">
+                        {isUser ? (
+                          <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                            <span className="text-gray-600 text-sm">主持</span>
+                          </div>
+                        ) : participant ? (
+                          <img
+                            src={participant.character.avatar}
+                            alt={participant.character.name}
+                            className="w-10 h-10 rounded-full object-cover"
+                          />
+                        ) : null}
+                      </div>
+
+                      {/* 内容 */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium text-sm">
+                            {isUser ? '主持人' : participant?.character.name || '未知'}
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {new Date(message.timestamp).toLocaleString()}
+                          </span>
+                          {message.round > 0 && (
+                            <span className="text-xs text-gray-400">第{message.round}轮</span>
+                          )}
+                        </div>
+                        <div className="text-sm text-gray-700 whitespace-pre-wrap break-words">
+                          {message.content}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* 底部 */}
+            <div className="p-4 border-t bg-gray-50">
+              <button
+                onClick={() => setShowMeetingRecord(false)}
+                className="w-full py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                关闭
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

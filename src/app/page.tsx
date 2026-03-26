@@ -12,6 +12,7 @@ import { useCharacters } from '@/hooks/useCharacters';
 import { CharacterForm } from '@/components/CharacterForm';
 import { ChatInterface } from '@/components/ChatInterface';
 import { MeetingRoom } from '@/components/MeetingRoom';
+import { meetingStorage } from '@/lib/meetingStorage';
 import { Avatar } from '@/components/Avatar';
 import { Character, CharacterGroup } from '@/types/character';
 import { gistSyncService } from '@/lib/gistSync';
@@ -122,7 +123,7 @@ export default function Home() {
   const handleSyncToGist = async () => {
     // 使用 tempSettings 中的值，这样用户修改后可以立即同步
     const currentSettings = { ...apiSettings, ...tempSettings };
-    
+
     if (!currentSettings.gistToken) {
       setSyncError('请先配置 GitHub Token');
       return;
@@ -137,7 +138,8 @@ export default function Home() {
       const chatSessions = getAllChatSessions();
       const characterHistories = getAllCharacterHistories();
       const characterGroups = storage.getCharacterGroups();
-      const data = gistSyncService.prepareSyncData(characters, chatSessions, characterHistories, characterGroups, currentSettings);
+      const meetings = meetingStorage.getMeetings();
+      const data = gistSyncService.prepareSyncData(characters, chatSessions, characterHistories, characterGroups, meetings, currentSettings);
 
       let gistId: string | null = currentSettings.gistId;
       if (!gistId) {
@@ -180,15 +182,17 @@ export default function Home() {
       gistSyncService.setConfig(currentSettings.gistToken, currentSettings.gistId);
       const data = await gistSyncService.fetchGist();
 
-      if (data && (data.characters || data.settings || data.chatSessions || data.characterHistories)) {
+      if (data && (data.characters || data.settings || data.chatSessions || data.characterHistories || data.meetings)) {
         const hasCharacters = data.characters && data.characters.length > 0;
         const hasSettings = data.settings && Object.keys(data.settings).length > 0;
         const hasChatSessions = data.chatSessions && Object.keys(data.chatSessions).length > 0;
         const hasHistories = data.characterHistories && Object.keys(data.characterHistories).length > 0;
+        const hasMeetings = data.meetings && data.meetings.length > 0;
 
         let message = '找到数据，是否恢复？';
         const parts: string[] = [];
         if (hasCharacters) parts.push(`${data.characters.length} 个角色`);
+        if (hasMeetings) parts.push(`${data.meetings.length} 个会议`);
         if (hasHistories) parts.push('历史记录');
         if (hasChatSessions) parts.push('当前会话');
         if (hasSettings) parts.push('设置');
@@ -230,6 +234,11 @@ export default function Home() {
             });
           }
 
+          // 恢复会议记录
+          if (hasMeetings && data.meetings) {
+            meetingStorage.saveMeetings(data.meetings);
+          }
+
           if (hasSettings) {
             const restoredSettings = { ...DEFAULT_SETTINGS, ...data.settings };
             setApiSettings(restoredSettings);
@@ -254,7 +263,8 @@ export default function Home() {
     const chatSessions = getAllChatSessions();
     const characterHistories = getAllCharacterHistories();
     const characterGroups = storage.getCharacterGroups();
-    const data = gistSyncService.exportFullData(characters, chatSessions, characterHistories, characterGroups, apiSettings);
+    const meetings = meetingStorage.getMeetings();
+    const data = gistSyncService.exportFullData(characters, chatSessions, characterHistories, characterGroups, meetings, apiSettings);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -277,16 +287,18 @@ export default function Home() {
       const content = event.target?.result as string;
       const data = gistSyncService.importData(content);
 
-      if (data && (data.characters || data.chatSessions || data.settings || data.characterGroups)) {
+      if (data && (data.characters || data.chatSessions || data.settings || data.characterGroups || data.meetings)) {
         const hasCharacters = data.characters && data.characters.length > 0;
         const hasChatSessions = data.chatSessions && Object.keys(data.chatSessions).length > 0;
         const hasSettings = data.settings && Object.keys(data.settings).length > 0;
         const hasGroups = data.characterGroups && data.characterGroups.length > 0;
+        const hasMeetings = data.meetings && data.meetings.length > 0;
 
         let message = '找到数据，是否导入？';
         const parts: string[] = [];
         if (hasCharacters) parts.push(`${data.characters.length} 个角色`);
         if (hasGroups) parts.push(`${data.characterGroups.length} 个分组`);
+        if (hasMeetings) parts.push(`${data.meetings.length} 个会议`);
         if (hasChatSessions) parts.push('聊天记录');
         if (hasSettings) parts.push('设置');
         if (parts.length > 0) {
@@ -318,6 +330,11 @@ export default function Home() {
             Object.values(data.chatSessions).forEach((session: any) => {
               storage.saveChatSession(session);
             });
+          }
+
+          // 恢复会议记录
+          if (hasMeetings && data.meetings) {
+            meetingStorage.saveMeetings(data.meetings);
           }
 
           if (hasSettings) {

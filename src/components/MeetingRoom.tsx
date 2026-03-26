@@ -5,7 +5,7 @@ import { Character } from '@/types/character';
 import { MeetingSession, MeetingParticipant, MeetingMessage } from '@/types/meeting';
 import { meetingStorage } from '@/lib/meetingStorage';
 import { apiService } from '@/lib/api';
-import { X, Plus, Users, MessageCircle, Download, ChevronRight, ChevronLeft, Settings, Play, Square, Mic, Volume2, VolumeX } from 'lucide-react';
+import { X, Plus, Users, MessageCircle, Download, ChevronRight, ChevronLeft, Settings, Play, Square, Mic, Volume2, VolumeX, Zap } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 interface MeetingRoomProps {
@@ -66,6 +66,14 @@ export function MeetingRoom({ characters, onClose }: MeetingRoomProps) {
   const [debateMode, setDebateMode] = useState(false);
   const [debateTarget, setDebateTarget] = useState<{ messageId: string; characterId: string; content: string } | null>(null);
   const [selectedDebaters, setSelectedDebaters] = useState<string[]>([]); // 选中的询问对象
+  
+  // 风暴模式状态
+  const [stormMode, setStormMode] = useState(false);
+  const [stormInterval, setStormInterval] = useState<NodeJS.Timeout | null>(null);
+  const [stormPaused, setStormPaused] = useState(false);
+  const [stormTopic, setStormTopic] = useState('');
+  const [stormRound, setStormRound] = useState(0);
+  const [stormMaxRounds, setStormMaxRounds] = useState(10);
   
   // 显示添加参与者面板
   const [showAddParticipant, setShowAddParticipant] = useState(false);
@@ -501,6 +509,188 @@ ${contextMessages}`;
     setIsProcessing(false);
   };
 
+  // 风暴模式：自动辩论
+  const startStormMode = async (topic: string) => {
+    if (!currentMeeting || !settings.apiKey) {
+      setError('请先设置API密钥');
+      return;
+    }
+
+    setStormMode(true);
+    setStormTopic(topic);
+    setStormRound(0);
+    setStormPaused(false);
+    setIsProcessing(true);
+
+    // 添加主持人的开场话题
+    const hostMessage: Omit<MeetingMessage, 'id' | 'timestamp'> = {
+      meetingId: currentMeeting.id,
+      characterId: '',
+      role: 'user',
+      content: `【风暴模式】${topic}`,
+      round: currentMeeting.currentRound,
+      participantOrder: 0,
+    };
+    meetingStorage.addMessage(currentMeeting.id, hostMessage);
+    
+    const updatedMeeting = meetingStorage.getMeeting(currentMeeting.id);
+    if (updatedMeeting) {
+      setCurrentMeeting(updatedMeeting);
+    }
+
+    // 启动定时器，每分钟让一个角色发言
+    const interval = setInterval(async () => {
+      if (stormPaused) return;
+
+      await runStormRound(topic);
+    }, 60000); // 每分钟一次
+
+    setStormInterval(interval);
+    
+    // 立即执行第一轮
+    await runStormRound(topic);
+  };
+
+  // 执行一轮风暴辩论
+  const runStormRound = async (topic: string) => {
+    if (!currentMeeting) return;
+
+    const currentRound = stormRound;
+    if (currentRound >= stormMaxRounds) {
+      stopStormMode();
+      return;
+    }
+
+    setStormRound(prev => prev + 1);
+
+    // 随机选择一个角色发言（或者按顺序）
+    const activeParticipants = currentMeeting.participants.filter(p => p.isActive);
+    if (activeParticipants.length === 0) return;
+
+    // 按顺序选择发言者
+    const speaker = activeParticipants[currentRound % activeParticipants.length];
+    
+    try {
+      apiService.setConfig(settings.apiKey, settings.apiBaseURL, settings.apiModel);
+
+      // 获取最近的讨论上下文（最近5条消息）
+      const recentMessages = currentMeeting.messages.slice(-5);
+      const contextText = recentMessages.map(m => {
+        if (m.role === 'user') return `主持人：${m.content}`;
+        const p = currentMeeting.participants.find(part => part.characterId === m.characterId);
+        return `${p?.character.name || '参与者'}：${m.content}`;
+      }).join('\n');
+
+      // 构建Prompt，强调性格和立场
+      const systemPrompt = `${speaker.character.systemPrompt}
+
+你正在参加一场激烈的头脑风暴辩论！
+
+当前话题：${topic}
+
+重要提示：
+1. 根据你的性格和立场，对话题发表鲜明观点
+2. 可以反驳、质疑或支持之前参与者的观点
+3. 保持你的角色特色，用词和语气要符合身份
+4. 回复控制在${speaker.maxLength}字以内
+5. 要有攻击性或建设性，推动讨论深入
+
+最近的讨论：
+${contextText || '（刚开始讨论）'}
+
+请发表你的观点，要体现你的性格特点！`;
+
+      const response = await apiService.chat({
+        messages: [
+          { role: 'system' as const, content: systemPrompt },
+          { role: 'user' as const, content: `请就"${topic}"发表你的看法，可以回应之前的观点（${speaker.maxLength}字以内）：` },
+        ],
+        temperature: 0.8, // 更高的温度增加创造性
+        max_tokens: Math.min(speaker.maxLength * 2, 1000),
+      });
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      // 截断回复
+      let replyContent = response.content;
+      if (replyContent.length > speaker.maxLength) {
+        replyContent = replyContent.slice(0, speaker.maxLength) + '...';
+      }
+
+      const participantMessage: Omit<MeetingMessage, 'id' | 'timestamp'> = {
+        meetingId: currentMeeting.id,
+        characterId: speaker.characterId,
+        role: 'assistant',
+        content: replyContent,
+        round: currentMeeting.currentRound,
+        participantOrder: speaker.order,
+      };
+
+      meetingStorage.addMessage(currentMeeting.id, participantMessage);
+
+      // 更新会议状态
+      const latestMeeting = meetingStorage.getMeeting(currentMeeting.id);
+      if (latestMeeting) {
+        setCurrentMeeting(latestMeeting);
+
+        // 语音朗读
+        if (settings.voiceEnabled) {
+          const newMessage = latestMeeting.messages[latestMeeting.messages.length - 1];
+          if (newMessage) {
+            speakMessage(replyContent, newMessage.id);
+          }
+        }
+      }
+    } catch (err) {
+      console.error(`${speaker.character.name} 风暴发言失败:`, err);
+    }
+  };
+
+  // 暂停/继续风暴模式
+  const toggleStormPause = () => {
+    setStormPaused(prev => !prev);
+  };
+
+  // 停止风暴模式
+  const stopStormMode = () => {
+    if (stormInterval) {
+      clearInterval(stormInterval);
+      setStormInterval(null);
+    }
+    setStormMode(false);
+    setStormPaused(false);
+    setStormRound(0);
+    setIsProcessing(false);
+    
+    // 添加结束标记
+    if (currentMeeting) {
+      const endMessage: Omit<MeetingMessage, 'id' | 'timestamp'> = {
+        meetingId: currentMeeting.id,
+        characterId: '',
+        role: 'user',
+        content: '【风暴模式结束】',
+        round: currentMeeting.currentRound,
+        participantOrder: 0,
+      };
+      meetingStorage.addMessage(currentMeeting.id, endMessage);
+      const updatedMeeting = meetingStorage.getMeeting(currentMeeting.id);
+      if (updatedMeeting) {
+        setCurrentMeeting(updatedMeeting);
+      }
+    }
+  };
+
+  // 组件卸载时清理
+  useEffect(() => {
+    return () => {
+      if (stormInterval) {
+        clearInterval(stormInterval);
+      }
+    };
+  }, [stormInterval]);
+
   const handleExportMeeting = () => {
     if (!currentMeeting) return;
     
@@ -559,6 +749,46 @@ ${contextMessages}`;
 
         {currentMeeting && (
           <>
+            {/* 风暴模式按钮 */}
+            {!stormMode ? (
+              <button
+                onClick={() => {
+                  const topic = prompt('请输入风暴模式的话题：', currentMeeting.topic || '自由讨论');
+                  if (topic) {
+                    const rounds = parseInt(prompt('请输入最大轮数（默认10轮）：', '10') || '10');
+                    setStormMaxRounds(rounds);
+                    startStormMode(topic);
+                  }
+                }}
+                className="flex items-center gap-1 px-3 py-1.5 mr-2 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600 transition-colors"
+                title="启动风暴模式"
+              >
+                <Zap className="w-4 h-4" />
+                风暴模式
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 mr-2">
+                <button
+                  onClick={toggleStormPause}
+                  className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                    stormPaused 
+                      ? 'bg-green-500 text-white hover:bg-green-600' 
+                      : 'bg-yellow-500 text-white hover:bg-yellow-600'
+                  }`}
+                >
+                  {stormPaused ? <Play className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                  {stormPaused ? '继续' : '暂停'}
+                </button>
+                <button
+                  onClick={stopStormMode}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                  停止
+                </button>
+              </div>
+            )}
+            
             <button
               onClick={handleExportMeeting}
               className="p-2 hover:bg-gray-200 rounded-full transition-colors mr-1"
@@ -567,7 +797,12 @@ ${contextMessages}`;
               <Download className="w-5 h-5 text-gray-600" />
             </button>
             <button
-              onClick={() => { setCurrentMeeting(null); setShowMeetingList(true); stopSpeaking(); }}
+              onClick={() => { 
+                setCurrentMeeting(null); 
+                setShowMeetingList(true); 
+                stopSpeaking(); 
+                if (stormMode) stopStormMode();
+              }}
               className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"
             >
               返回列表
@@ -919,6 +1154,14 @@ ${contextMessages}`;
                   <span className="flex items-center gap-1 text-[#07C160]">
                     <Volume2 className="w-3 h-3" />
                     语音朗读开启
+                  </span>
+                )}
+                
+                {/* 风暴模式状态 */}
+                {stormMode && (
+                  <span className="flex items-center gap-1 text-orange-600">
+                    <Zap className="w-3 h-3" />
+                    风暴模式 {stormPaused ? '(暂停)' : `第${stormRound}/${stormMaxRounds}轮`}
                   </span>
                 )}
               </div>

@@ -5,11 +5,13 @@ import {
   MessageSquare, Users, Compass, User, Plus, Search, 
   MoreHorizontal, X, Settings, Key, Sparkles, 
   Volume2, Cloud, Download, Upload, RefreshCw, 
-  Check, AlertCircle, Trash2, Edit3, Smile, Plus as PlusIcon
+  Check, AlertCircle, Trash2, Edit3, Smile, Plus as PlusIcon,
+  UsersRound
 } from 'lucide-react';
 import { useCharacters } from '@/hooks/useCharacters';
 import { CharacterForm } from '@/components/CharacterForm';
 import { ChatInterface } from '@/components/ChatInterface';
+import { MeetingRoom } from '@/components/MeetingRoom';
 import { Character } from '@/types/character';
 import { gistSyncService } from '@/lib/gistSync';
 import { storage } from '@/lib/storage';
@@ -68,6 +70,7 @@ export default function Home() {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [contextMenuCharacter, setContextMenuCharacter] = useState<Character | null>(null);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
+  const [showMeetingRoom, setShowMeetingRoom] = useState(false);
 
   useEffect(() => {
     const savedSettings = localStorage.getItem('ai_app_settings');
@@ -581,6 +584,18 @@ export default function Home() {
           <div className="h-full overflow-y-auto">
             <div className="space-y-2">
               <div className="bg-white">
+                <div 
+                  onClick={() => setShowMeetingRoom(true)}
+                  className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 active:bg-gray-100 cursor-pointer"
+                >
+                  <div className="w-7 h-7 bg-[#07C160] rounded-lg flex items-center justify-center shrink-0">
+                    <UsersRound className="w-4 h-4 text-white" />
+                  </div>
+                  <span className="text-base text-gray-900">会议室</span>
+                  <span className="ml-auto text-xs text-gray-400">多角色讨论</span>
+                </div>
+              </div>
+              <div className="bg-white">
                 <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100">
                   <div className="w-7 h-7 shrink-0" />
                   <span className="text-base text-gray-900">朋友圈</span>
@@ -1011,6 +1026,13 @@ export default function Home() {
         <ChatInterface
           character={chattingCharacter}
           onClose={() => setChattingCharacter(undefined)}
+        />
+      )}
+
+      {showMeetingRoom && (
+        <MeetingRoom
+          characters={characters}
+          onClose={() => setShowMeetingRoom(false)}
         />
       )}
     </div>

@@ -61,6 +61,13 @@ export function MeetingRoom({ characters, onClose }: MeetingRoomProps) {
   const [isListening, setIsListening] = useState(false);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  
+  // 辩论模式状态
+  const [debateMode, setDebateMode] = useState(false);
+  const [debateTarget, setDebateTarget] = useState<{ messageId: string; characterId: string; content: string } | null>(null);
+  
+  // 显示添加参与者面板
+  const [showAddParticipant, setShowAddParticipant] = useState(false);
 
   // 创建表单状态
   const [meetingTitle, setMeetingTitle] = useState('');
@@ -361,6 +368,129 @@ ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
     if (finalMeeting) {
       setCurrentMeeting(finalMeeting);
     }
+
+    setIsProcessing(false);
+  };
+
+  // 辩论模式：询问其他角色对某条消息的看法
+  const handleDebateMessage = async (content: string, target: { messageId: string; characterId: string; content: string }) => {
+    if (!currentMeeting || !content.trim() || isProcessing) return;
+    if (!settings.apiKey) {
+      setError('请先设置API密钥');
+      return;
+    }
+
+    setIsProcessing(true);
+    setError('');
+
+    // 添加主持人的追问
+    const hostMessage: Omit<MeetingMessage, 'id' | 'timestamp'> = {
+      meetingId: currentMeeting.id,
+      characterId: '',
+      role: 'user',
+      content: content.trim(),
+      round: currentMeeting.currentRound,
+      participantOrder: 0,
+    };
+
+    meetingStorage.addMessage(currentMeeting.id, hostMessage);
+
+    // 重新加载会议数据
+    const updatedMeeting = meetingStorage.getMeeting(currentMeeting.id);
+    if (updatedMeeting) {
+      setCurrentMeeting(updatedMeeting);
+    }
+
+    // 获取被评论的发言者
+    const targetParticipant = currentMeeting.participants.find(p => p.characterId === target.characterId);
+    const targetName = targetParticipant?.character.name || '该参与者';
+
+    // 让其他参与者（不包括被评论者）依次回复
+    apiService.setConfig(settings.apiKey, settings.apiBaseURL, settings.apiModel);
+
+    for (const participant of currentMeeting.participants) {
+      // 跳过被评论者和非活跃参与者
+      if (participant.characterId === target.characterId || !participant.isActive) continue;
+
+      try {
+        // 构建上下文
+        const contextMessages = meetingStorage.getContextMessages(
+          currentMeeting.id,
+          participant.characterId,
+          'discussion' // 辩论模式强制使用讨论模式
+        );
+
+        const systemPrompt = `${participant.character.systemPrompt}
+
+你正在参加一个辩论讨论。主持人询问你对 ${targetName} 观点的看法。
+
+${targetName} 的观点是："${target.content}"
+
+重要限制：你的回复必须控制在${participant.maxLength}字以内。请简洁明了地表达观点。
+
+会议主题：${currentMeeting.topic || '无特定主题'}
+
+之前的讨论：
+${contextMessages}`;
+
+        const response = await apiService.chat({
+          messages: [
+            { role: 'system' as const, content: systemPrompt },
+            { role: 'user' as const, content: `主持人问：${content.trim()}\n\n请针对 ${targetName} 的观点发表你的看法（${participant.maxLength}字以内）：` },
+          ],
+          temperature: 0.7,
+          max_tokens: Math.min(participant.maxLength * 2, 1000),
+        });
+
+        if (response.error) {
+          throw new Error(response.error);
+        }
+
+        // 截断回复以确保不超过字数限制
+        let replyContent = response.content;
+        if (replyContent.length > participant.maxLength) {
+          replyContent = replyContent.slice(0, participant.maxLength) + '...';
+        }
+
+        const participantMessage: Omit<MeetingMessage, 'id' | 'timestamp'> = {
+          meetingId: currentMeeting.id,
+          characterId: participant.characterId,
+          role: 'assistant',
+          content: replyContent,
+          round: currentMeeting.currentRound,
+          participantOrder: participant.order,
+        };
+
+        meetingStorage.addMessage(currentMeeting.id, participantMessage);
+
+        // 更新当前会议状态
+        const latestMeeting = meetingStorage.getMeeting(currentMeeting.id);
+        if (latestMeeting) {
+          setCurrentMeeting(latestMeeting);
+
+          // 如果开启了语音朗读，朗读最新消息
+          if (settings.voiceEnabled) {
+            const newMessage = latestMeeting.messages[latestMeeting.messages.length - 1];
+            if (newMessage && newMessage.characterId === participant.characterId) {
+              speakMessage(replyContent, newMessage.id);
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`${participant.character.name} 回复失败:`, err);
+        // 继续让其他参与者回复
+      }
+    }
+
+    // 辩论模式不进入下一轮，保持当前轮次
+    const finalMeeting = meetingStorage.getMeeting(currentMeeting.id);
+    if (finalMeeting) {
+      setCurrentMeeting(finalMeeting);
+    }
+
+    // 退出辩论模式
+    setDebateMode(false);
+    setDebateTarget(null);
 
     setIsProcessing(false);
   };
@@ -709,9 +839,34 @@ ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
                   <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full ${colors.bg} ${colors.border} border flex items-center justify-center`}>
                     <span className={`text-[8px] font-bold ${colors.name}`}>{index + 1}</span>
                   </div>
+                  {/* 移除参与者按钮 */}
+                  <button
+                    onClick={() => {
+                      if (confirm(`确定要移除 ${p.character.name} 吗？`)) {
+                        meetingStorage.removeParticipant(currentMeeting.id, p.characterId);
+                        const updatedMeeting = meetingStorage.getMeeting(currentMeeting.id);
+                        if (updatedMeeting) {
+                          setCurrentMeeting(updatedMeeting);
+                        }
+                      }
+                    }}
+                    className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[10px]"
+                    title="移除参与者"
+                  >
+                    ×
+                  </button>
                 </div>
               );
             })}
+            
+            {/* 添加参与者按钮 */}
+            <button
+              onClick={() => setShowAddParticipant(true)}
+              className="w-10 h-10 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:border-[#07C160] hover:text-[#07C160] transition-colors"
+              title="添加参与者"
+            >
+              +
+            </button>
           </div>
 
           {/* 中间消息区域 */}
@@ -844,7 +999,7 @@ ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
                           )}
                         </div>
                         
-                        {/* 语音朗读按钮（仅角色消息） */}
+                        {/* 语音朗读按钮和询问他人（仅角色消息） */}
                         {message.role !== 'user' && (
                           <div className="flex items-center gap-1 mt-1">
                             <button
@@ -862,6 +1017,22 @@ ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
                                 <Volume2 className="w-3.5 h-3.5" />
                               )}
                             </button>
+                            
+                            {/* 询问他人按钮 */}
+                            <button
+                              onClick={() => {
+                                setDebateTarget({
+                                  messageId: message.id,
+                                  characterId: message.characterId,
+                                  content: message.content,
+                                });
+                                setDebateMode(true);
+                              }}
+                              className="p-1 rounded-full hover:bg-purple-100 text-gray-400 hover:text-purple-600 transition-colors"
+                              title="询问其他角色对此观点的看法"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         )}
                       </div>
@@ -874,12 +1045,36 @@ ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
 
             {/* 输入区域 */}
             <div className="bg-white border-t border-gray-200 px-4 py-3">
+              {/* 辩论模式提示 */}
+              {debateMode && debateTarget && (
+                <div className="mb-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-purple-700">辩论模式</span>
+                    <button
+                      onClick={() => {
+                        setDebateMode(false);
+                        setDebateTarget(null);
+                      }}
+                      className="text-xs text-purple-500 hover:text-purple-700"
+                    >
+                      取消
+                    </button>
+                  </div>
+                  <p className="text-xs text-purple-600 mb-1">
+                    询问其他角色对 <strong>{currentMeeting.participants.find(p => p.characterId === debateTarget.characterId)?.character.name}</strong> 的看法：
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">{debateTarget.content.slice(0, 50)}...</p>
+                </div>
+              )}
+              
               {isProcessing ? (
                 <div className="flex items-center justify-center gap-2 py-3 text-gray-500">
                   <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                   <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                   <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                  <span className="ml-2 text-sm">正在收集各方意见...</span>
+                  <span className="ml-2 text-sm">
+                    {debateMode ? '正在收集各方观点...' : '正在收集各方意见...'}
+                  </span>
                 </div>
               ) : (
                 <form
@@ -887,8 +1082,13 @@ ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
                     e.preventDefault();
                     const input = (e.target as HTMLFormElement).elements.namedItem('message') as HTMLInputElement;
                     if (input.value.trim()) {
-                      handleSendMessage(input.value);
-                      input.value = '';
+                      if (debateMode && debateTarget) {
+                        handleDebateMessage(input.value, debateTarget);
+                        input.value = '';
+                      } else {
+                        handleSendMessage(input.value);
+                        input.value = '';
+                      }
                     }
                   }}
                   className="flex gap-2"
@@ -913,14 +1113,22 @@ ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
                     ref={inputRef}
                     name="message"
                     type="text"
-                    placeholder={isListening ? '正在听...' : '输入你的问题或话题...'}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#07C160] focus:border-[#07C160]"
+                    placeholder={debateMode ? '输入你的追问或让其他角色发表看法...' : (isListening ? '正在听...' : '输入你的问题或话题...')}
+                    className={`flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:outline-none ${
+                      debateMode 
+                        ? 'border-purple-300 focus:ring-purple-200 focus:border-purple-400' 
+                        : 'border-gray-300 focus:ring-[#07C160] focus:border-[#07C160]'
+                    }`}
                   />
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-[#07C160] text-white rounded-lg hover:bg-[#06AD56] transition-colors"
+                    className={`px-4 py-2 text-white rounded-lg transition-colors ${
+                      debateMode 
+                        ? 'bg-purple-500 hover:bg-purple-600' 
+                        : 'bg-[#07C160] hover:bg-[#06AD56]'
+                    }`}
                   >
-                    发送
+                    {debateMode ? '询问' : '发送'}
                   </button>
                 </form>
               )}
@@ -1046,6 +1254,70 @@ ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
                   </div>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 添加参与者弹窗 */}
+      {showAddParticipant && currentMeeting && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg w-full max-w-md max-h-[80vh] overflow-y-auto p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">添加参与者</h3>
+              <button
+                onClick={() => setShowAddParticipant(false)}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {characters
+                .filter(c => !currentMeeting.participants.some(p => p.characterId === c.id))
+                .length === 0 ? (
+                <div className="text-center text-gray-500 py-8">
+                  <p>所有角色都已加入会议室</p>
+                </div>
+              ) : (
+                characters
+                  .filter(c => !currentMeeting.participants.some(p => p.characterId === c.id))
+                  .map(character => (
+                    <div
+                      key={character.id}
+                      className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer border border-gray-200"
+                      onClick={() => {
+                        meetingStorage.addParticipant(currentMeeting.id, character);
+                        const updatedMeeting = meetingStorage.getMeeting(currentMeeting.id);
+                        if (updatedMeeting) {
+                          setCurrentMeeting(updatedMeeting);
+                        }
+                        setShowAddParticipant(false);
+                      }}
+                    >
+                      <img
+                        src={character.avatar}
+                        alt={character.name}
+                        className="w-10 h-10 rounded-lg object-cover"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium text-sm">{character.name}</div>
+                        <div className="text-xs text-gray-500">{character.title}</div>
+                      </div>
+                      <Plus className="w-5 h-5 text-[#07C160]" />
+                    </div>
+                  ))
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setShowAddParticipant(false)}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                关闭
+              </button>
             </div>
           </div>
         </div>

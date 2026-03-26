@@ -129,6 +129,41 @@ export const meetingStorage = {
     meetingStorage.updateMeeting(meeting);
   },
 
+  // 添加参与者到会议室
+  addParticipant: (meetingId: string, character: Character): MeetingParticipant => {
+    const meeting = meetingStorage.getMeeting(meetingId);
+    if (!meeting) throw new Error('会议室不存在');
+
+    const newParticipant: MeetingParticipant = {
+      characterId: character.id,
+      character,
+      order: meeting.participants.length,
+      maxLength: 300,
+      canSeeOthers: meeting.contextMode === 'discussion',
+      isActive: true,
+    };
+
+    meeting.participants.push(newParticipant);
+    meeting.updatedAt = Date.now();
+    meetingStorage.updateMeeting(meeting);
+
+    return newParticipant;
+  },
+
+  // 从会议室移除参与者
+  removeParticipant: (meetingId: string, characterId: string): void => {
+    const meeting = meetingStorage.getMeeting(meetingId);
+    if (!meeting) throw new Error('会议室不存在');
+
+    meeting.participants = meeting.participants.filter(p => p.characterId !== characterId);
+    // 重新排序
+    meeting.participants.forEach((p, index) => {
+      p.order = index;
+    });
+    meeting.updatedAt = Date.now();
+    meetingStorage.updateMeeting(meeting);
+  },
+
   // 获取会议室的上下文消息（用于构建prompt）
   getContextMessages: (meetingId: string, currentParticipantId: string, contextMode: 'independent' | 'discussion'): string => {
     const meeting = meetingStorage.getMeeting(meetingId);

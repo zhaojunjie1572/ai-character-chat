@@ -21,3 +21,13 @@ export interface ChatSession {
   characterId: string;
   messages: Message[];
 }
+
+// 多会话支持
+export interface ChatHistory {
+  id: string;
+  characterId: string;
+  title: string;
+  messages: Message[];
+  createdAt: number;
+  updatedAt: number;
+}

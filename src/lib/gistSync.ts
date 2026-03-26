@@ -25,7 +25,7 @@ export class GistSyncService {
     this.gistId = gistId;
   }
 
-  async createGist(data: SyncData): Promise<string | null> {
+  async createGist(data: SyncData): Promise<string> {
     try {
       const response = await fetch('https://api.github.com/gists', {
         method: 'POST',
@@ -46,22 +46,29 @@ export class GistSyncService {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || '创建 Gist 失败');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('GitHub API 错误:', response.status, errorData);
+        
+        if (response.status === 401) {
+          throw new Error('GitHub Token 无效或已过期，请检查 Token 是否正确');
+        } else if (response.status === 403) {
+          throw new Error('GitHub Token 没有 Gist 权限，请在 Token 设置中勾选 gist 权限');
+        } else {
+          throw new Error(errorData.message || `创建 Gist 失败 (${response.status})`);
+        }
       }
 
       const gist = await response.json();
       return gist.id;
-    } catch (error) {
+    } catch (error: any) {
       console.error('创建 Gist 失败:', error);
-      return null;
+      throw error;
     }
   }
 
-  async updateGist(data: SyncData): Promise<boolean> {
+  async updateGist(data: SyncData): Promise<void> {
     if (!this.gistId) {
-      console.error('没有 Gist ID');
-      return false;
+      throw new Error('没有 Gist ID');
     }
 
     try {
@@ -83,21 +90,28 @@ export class GistSyncService {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || '更新 Gist 失败');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('GitHub API 错误:', response.status, errorData);
+        
+        if (response.status === 401) {
+          throw new Error('GitHub Token 无效或已过期');
+        } else if (response.status === 404) {
+          throw new Error('Gist 不存在，请清空 Gist ID 后重新同步');
+        } else if (response.status === 403) {
+          throw new Error('没有权限更新此 Gist，请检查 Token 权限或清空 Gist ID');
+        } else {
+          throw new Error(errorData.message || `更新 Gist 失败 (${response.status})`);
+        }
       }
-
-      return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('更新 Gist 失败:', error);
-      return false;
+      throw error;
     }
   }
 
   async fetchGist(): Promise<SyncData | null> {
     if (!this.gistId) {
-      console.error('没有 Gist ID');
-      return null;
+      throw new Error('没有 Gist ID');
     }
 
     try {
@@ -109,8 +123,16 @@ export class GistSyncService {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || '获取 Gist 失败');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('GitHub API 错误:', response.status, errorData);
+        
+        if (response.status === 401) {
+          throw new Error('GitHub Token 无效或已过期');
+        } else if (response.status === 404) {
+          throw new Error('Gist 不存在，请清空 Gist ID 后重新同步');
+        } else {
+          throw new Error(errorData.message || `获取 Gist 失败 (${response.status})`);
+        }
       }
 
       const gist = await response.json();
@@ -122,9 +144,9 @@ export class GistSyncService {
 
       const content = await fetch(file.raw_url).then(r => r.text());
       return JSON.parse(content);
-    } catch (error) {
+    } catch (error: any) {
       console.error('获取 Gist 失败:', error);
-      return null;
+      throw error;
     }
   }
 
@@ -138,8 +160,9 @@ export class GistSyncService {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || '获取 Gist 列表失败');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('GitHub API 错误:', response.status, errorData);
+        throw new Error(errorData.message || `获取 Gist 列表失败 (${response.status})`);
       }
 
       const gists = await response.json();
@@ -148,9 +171,9 @@ export class GistSyncService {
         description: gist.description || '无描述',
         updated_at: gist.updated_at,
       }));
-    } catch (error) {
+    } catch (error: any) {
       console.error('获取 Gist 列表失败:', error);
-      return [];
+      throw error;
     }
   }
 

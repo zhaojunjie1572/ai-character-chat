@@ -5,7 +5,7 @@ import { Character } from '@/types/character';
 import { MeetingSession, MeetingParticipant, MeetingMessage } from '@/types/meeting';
 import { meetingStorage } from '@/lib/meetingStorage';
 import { apiService } from '@/lib/api';
-import { X, Plus, Users, MessageCircle, Download, ChevronRight, ChevronLeft, Settings, Play, Square } from 'lucide-react';
+import { X, Plus, Users, MessageCircle, Download, ChevronRight, ChevronLeft, Settings, Play, Square, Mic, Volume2, VolumeX } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 interface MeetingRoomProps {
@@ -17,13 +17,35 @@ interface AppSettings {
   apiKey: string;
   apiBaseURL: string;
   apiModel: string;
+  voiceEnabled: boolean;
+  voiceInputEnabled: boolean;
+  voiceVolume: number;
+  voiceRate: number;
+  voicePitch: number;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
   apiKey: '',
   apiBaseURL: 'https://api.openai.com/v1',
   apiModel: 'gpt-3.5-turbo',
+  voiceEnabled: false,
+  voiceInputEnabled: false,
+  voiceVolume: 1,
+  voiceRate: 1,
+  voicePitch: 1,
 };
+
+// 为参与者分配的颜色方案
+const PARTICIPANT_COLORS = [
+  { bg: 'bg-blue-100', border: 'border-blue-300', text: 'text-blue-800', name: 'text-blue-600' },
+  { bg: 'bg-purple-100', border: 'border-purple-300', text: 'text-purple-800', name: 'text-purple-600' },
+  { bg: 'bg-orange-100', border: 'border-orange-300', text: 'text-orange-800', name: 'text-orange-600' },
+  { bg: 'bg-pink-100', border: 'border-pink-300', text: 'text-pink-800', name: 'text-pink-600' },
+  { bg: 'bg-teal-100', border: 'border-teal-300', text: 'text-teal-800', name: 'text-teal-600' },
+  { bg: 'bg-indigo-100', border: 'border-indigo-300', text: 'text-indigo-800', name: 'text-indigo-600' },
+  { bg: 'bg-cyan-100', border: 'border-cyan-300', text: 'text-cyan-800', name: 'text-cyan-600' },
+  { bg: 'bg-rose-100', border: 'border-rose-300', text: 'text-rose-800', name: 'text-rose-600' },
+];
 
 export function MeetingRoom({ characters, onClose }: MeetingRoomProps) {
   const [meetings, setMeetings] = useState<MeetingSession[]>([]);
@@ -33,6 +55,9 @@ export function MeetingRoom({ characters, onClose }: MeetingRoomProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [error, setError] = useState('');
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
 
   // 创建表单状态
   const [meetingTitle, setMeetingTitle] = useState('');
@@ -44,6 +69,8 @@ export function MeetingRoom({ characters, onClose }: MeetingRoomProps) {
   const [participantSettings, setParticipantSettings] = useState<Record<string, { maxLength: number; canSeeOthers: boolean }>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadMeetings();
@@ -51,14 +78,41 @@ export function MeetingRoom({ characters, onClose }: MeetingRoomProps) {
     if (savedSettings) {
       const parsed = JSON.parse(savedSettings);
       setSettings({
-        apiKey: parsed.apiKey || '',
-        apiBaseURL: parsed.apiBaseURL || 'https://api.openai.com/v1',
-        apiModel: parsed.apiModel || 'gpt-3.5-turbo',
+        ...DEFAULT_SETTINGS,
+        ...parsed,
       });
     }
     // 调试：检查 characters
     console.log('MeetingRoom characters:', characters);
   }, [characters]);
+
+  // 初始化语音识别
+  useEffect(() => {
+    const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognitionAPI) {
+      recognitionRef.current = new SpeechRecognitionAPI();
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.lang = 'zh-CN';
+      
+      recognitionRef.current.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        if (inputRef.current) {
+          inputRef.current.value = inputRef.current.value + transcript;
+        }
+        setIsListening(false);
+      };
+      
+      recognitionRef.current.onerror = () => {
+        setIsListening(false);
+        setError('语音识别失败');
+      };
+      
+      recognitionRef.current.onend = () => {
+        setIsListening(false);
+      };
+    }
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -67,6 +121,76 @@ export function MeetingRoom({ characters, onClose }: MeetingRoomProps) {
   const loadMeetings = () => {
     const allMeetings = meetingStorage.getMeetings();
     setMeetings(allMeetings);
+  };
+
+  // 获取参与者的颜色索引
+  const getParticipantColorIndex = (characterId: string) => {
+    if (!currentMeeting) return 0;
+    const index = currentMeeting.participants.findIndex(p => p.characterId === characterId);
+    return index >= 0 ? index % PARTICIPANT_COLORS.length : 0;
+  };
+
+  // 获取参与者的颜色方案
+  const getParticipantColors = (characterId: string) => {
+    return PARTICIPANT_COLORS[getParticipantColorIndex(characterId)];
+  };
+
+  // 文字转语音
+  const speakMessage = (text: string, messageId: string) => {
+    if (!window.speechSynthesis) return;
+    
+    window.speechSynthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'zh-CN';
+    utterance.volume = settings.voiceVolume;
+    utterance.rate = settings.voiceRate;
+    utterance.pitch = settings.voicePitch;
+    
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+      setSpeakingMessageId(messageId);
+    };
+    utterance.onend = () => {
+      setIsSpeaking(false);
+      setSpeakingMessageId(null);
+    };
+    utterance.onerror = () => {
+      setIsSpeaking(false);
+      setSpeakingMessageId(null);
+    };
+    
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // 停止朗读
+  const stopSpeaking = () => {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      setSpeakingMessageId(null);
+    }
+  };
+
+  // 切换语音输入
+  const toggleVoiceInput = () => {
+    if (!recognitionRef.current) {
+      setError('浏览器不支持语音识别');
+      return;
+    }
+    
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+        setError('');
+      } catch (err) {
+        setError('语音识别启动失败');
+      }
+    }
   };
 
   const handleCreateMeeting = () => {
@@ -163,8 +287,8 @@ ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
 
         const response = await apiService.chat({
           messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: `主持人说：${content.trim()}\n\n请给出你的专业意见（${participant.maxLength}字以内）：` },
+            { role: 'system' as const, content: systemPrompt },
+            { role: 'user' as const, content: `主持人说：${content.trim()}\n\n请给出你的专业意见（${participant.maxLength}字以内）：` },
           ],
           temperature: 0.7,
           max_tokens: Math.min(participant.maxLength * 2, 1000),
@@ -195,6 +319,14 @@ ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
         const latestMeeting = meetingStorage.getMeeting(currentMeeting.id);
         if (latestMeeting) {
           setCurrentMeeting(latestMeeting);
+          
+          // 如果开启了语音朗读，朗读最新消息
+          if (settings.voiceEnabled) {
+            const newMessage = latestMeeting.messages[latestMeeting.messages.length - 1];
+            if (newMessage && newMessage.characterId === participant.characterId) {
+              speakMessage(replyContent, newMessage.id);
+            }
+          }
         }
       } catch (err) {
         console.error(`${participant.character.name} 回复失败:`, err);
@@ -278,7 +410,7 @@ ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
               <Download className="w-5 h-5 text-gray-600" />
             </button>
             <button
-              onClick={() => { setCurrentMeeting(null); setShowMeetingList(true); }}
+              onClick={() => { setCurrentMeeting(null); setShowMeetingList(true); stopSpeaking(); }}
               className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"
             >
               返回列表
@@ -538,18 +670,27 @@ ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
         <div className="flex-1 flex overflow-hidden">
           {/* 左侧参与者列表 */}
           <div className="w-16 bg-white border-r border-gray-200 flex flex-col items-center py-4 shrink-0">
-            {currentMeeting.participants.map(p => (
-              <div key={p.characterId} className="mb-3 relative group">
-                <img
-                  src={p.character.avatar}
-                  alt={p.character.name}
-                  className="w-10 h-10 rounded-lg object-cover border-2 border-transparent hover:border-[#07C160] transition-colors"
-                />
-                <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap z-10 pointer-events-none">
-                  {p.character.name}
+            {currentMeeting.participants.map((p, index) => {
+              const colors = PARTICIPANT_COLORS[index % PARTICIPANT_COLORS.length];
+              return (
+                <div key={p.characterId} className="mb-3 relative group">
+                  <div className={`w-10 h-10 rounded-lg overflow-hidden border-2 ${colors.border}`}>
+                    <img
+                      src={p.character.avatar}
+                      alt={p.character.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap z-10 pointer-events-none">
+                    {p.character.name}
+                  </div>
+                  {/* 颜色指示器 */}
+                  <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full ${colors.bg} ${colors.border} border flex items-center justify-center`}>
+                    <span className={`text-[8px] font-bold ${colors.name}`}>{index + 1}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* 中间消息区域 */}
@@ -563,6 +704,12 @@ ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
               <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
                 <span>第 {currentMeeting.currentRound}/{currentMeeting.maxRounds} 轮</span>
                 <span>{currentMeeting.contextMode === 'discussion' ? '讨论模式' : '独立回复'}</span>
+                {settings.voiceEnabled && (
+                  <span className="flex items-center gap-1 text-[#07C160]">
+                    <Volume2 className="w-3 h-3" />
+                    语音朗读开启
+                  </span>
+                )}
               </div>
             </div>
 
@@ -574,42 +721,103 @@ ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
                   <p>开始会议，输入你的问题或话题</p>
                 </div>
               ) : (
-                currentMeeting.messages.map((message, index) => (
-                  <div
-                    key={message.id}
-                    className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}
-                  >
-                    {message.role === 'user' ? (
-                      <div className="w-10 h-10 rounded-lg bg-[#07C160] flex items-center justify-center text-white font-semibold shrink-0">
-                        主
-                      </div>
-                    ) : (
-                      <img
-                        src={currentMeeting.participants.find(p => p.characterId === message.characterId)?.character.avatar}
-                        alt=""
-                        className="w-10 h-10 rounded-lg object-cover shrink-0"
-                      />
-                    )}
-                    <div className={`max-w-[70%] ${message.role === 'user' ? 'text-right' : ''}`}>
-                      <div className="text-xs text-gray-500 mb-1">
-                        {message.role === 'user' ? '主持人' : currentMeeting.participants.find(p => p.characterId === message.characterId)?.character.name}
-                        <span className="ml-2">{formatTime(message.timestamp)}</span>
+                currentMeeting.messages.map((message, index) => {
+                  const colors = message.role === 'user' 
+                    ? { bg: 'bg-[#07C160]', border: 'border-[#07C160]', text: 'text-white', name: 'text-white' }
+                    : getParticipantColors(message.characterId);
+                  const participant = currentMeeting.participants.find(p => p.characterId === message.characterId);
+                  const isSpeakingThis = speakingMessageId === message.id;
+                  
+                  return (
+                    <div
+                      key={message.id}
+                      className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}
+                    >
+                      {/* 头像 */}
+                      {message.role === 'user' ? (
+                        <div className="w-10 h-10 rounded-lg bg-[#07C160] flex items-center justify-center text-white font-semibold shrink-0 shadow-sm">
+                          主
+                        </div>
+                      ) : (
+                        <div className={`w-10 h-10 rounded-lg overflow-hidden shrink-0 shadow-sm border-2 ${colors.border}`}>
+                          <img
+                            src={participant?.character.avatar}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      )}
+                      
+                      {/* 消息内容 */}
+                      <div className={`max-w-[75%] ${message.role === 'user' ? 'text-right' : ''}`}>
+                        {/* 名称和时间 */}
+                        <div className="flex items-center gap-2 mb-1">
+                          {message.role === 'user' ? (
+                            <>
+                              <span className="text-xs text-gray-400">{formatTime(message.timestamp)}</span>
+                              <span className="text-xs font-medium text-[#07C160]">主持人</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className={`text-xs font-medium ${colors.name}`}>
+                                {participant?.character.name}
+                              </span>
+                              <span className="text-xs text-gray-400">
+                                第{message.round}轮 · {formatTime(message.timestamp)}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                        
+                        {/* 消息气泡 */}
+                        <div className="flex items-start gap-2">
+                          {message.role !== 'user' && (
+                            <div 
+                              className={`w-2 h-2 mt-3 ${colors.bg}`}
+                              style={{ clipPath: 'polygon(100% 50%, 0 0, 0 100%)' }}
+                            />
+                          )}
+                          <div
+                            className={`inline-block px-4 py-2.5 rounded-lg text-sm shadow-sm ${
+                              message.role === 'user'
+                                ? 'bg-[#07C160] text-white rounded-tr-none'
+                                : `${colors.bg} ${colors.text} ${colors.border} border rounded-tl-none`
+                            }`}
+                          >
+                            <p className="whitespace-pre-wrap text-left">{message.content}</p>
+                          </div>
+                          {message.role === 'user' && (
+                            <div 
+                              className="w-2 h-2 mt-3 bg-[#07C160]"
+                              style={{ clipPath: 'polygon(0 50%, 100% 0, 100% 100%)' }}
+                            />
+                          )}
+                        </div>
+                        
+                        {/* 语音朗读按钮（仅角色消息） */}
                         {message.role !== 'user' && (
-                          <span className="ml-2">第{message.round}轮</span>
+                          <div className="flex items-center gap-1 mt-1">
+                            <button
+                              onClick={() => isSpeakingThis ? stopSpeaking() : speakMessage(message.content, message.id)}
+                              className={`p-1 rounded-full transition-colors ${
+                                isSpeakingThis 
+                                  ? 'bg-red-100 text-red-600' 
+                                  : 'hover:bg-gray-100 text-gray-400 hover:text-gray-600'
+                              }`}
+                              title={isSpeakingThis ? '停止朗读' : '朗读消息'}
+                            >
+                              {isSpeakingThis ? (
+                                <VolumeX className="w-3.5 h-3.5" />
+                              ) : (
+                                <Volume2 className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
                         )}
                       </div>
-                      <div
-                        className={`inline-block px-4 py-2 rounded-lg text-sm ${
-                          message.role === 'user'
-                            ? 'bg-[#07C160] text-white'
-                            : 'bg-white border border-gray-200'
-                        }`}
-                      >
-                        {message.content}
-                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
               <div ref={messagesEndRef} />
             </div>
@@ -635,10 +843,27 @@ ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
                   }}
                   className="flex gap-2"
                 >
+                  {/* 语音输入按钮 */}
+                  {settings.voiceInputEnabled && (
+                    <button
+                      type="button"
+                      onClick={toggleVoiceInput}
+                      className={`p-2.5 rounded-lg transition-colors shrink-0 ${
+                        isListening 
+                          ? 'bg-red-500 text-white' 
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                      title={isListening ? '停止录音' : '语音输入'}
+                    >
+                      <Mic className="w-5 h-5" />
+                    </button>
+                  )}
+                  
                   <input
+                    ref={inputRef}
                     name="message"
                     type="text"
-                    placeholder="输入你的问题或话题..."
+                    placeholder={isListening ? '正在听...' : '输入你的问题或话题...'}
                     className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#07C160] focus:border-[#07C160]"
                   />
                   <button
@@ -649,6 +874,106 @@ ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
                   </button>
                 </form>
               )}
+            </div>
+          </div>
+
+          {/* 右侧设置面板 */}
+          <div className="w-48 bg-white border-l border-gray-200 p-4 shrink-0">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">语音设置</h4>
+            
+            {/* 语音朗读开关 */}
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs text-gray-600">自动朗读</span>
+              <button
+                onClick={() => {
+                  const newValue = !settings.voiceEnabled;
+                  const newSettings = { ...settings, voiceEnabled: newValue };
+                  setSettings(newSettings);
+                  localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
+                  if (!newValue) stopSpeaking();
+                }}
+                className={`w-10 h-5 rounded-full transition-colors relative ${
+                  settings.voiceEnabled ? 'bg-[#07C160]' : 'bg-gray-300'
+                }`}
+              >
+                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow ${
+                  settings.voiceEnabled ? 'left-5' : 'left-0.5'
+                }`} />
+              </button>
+            </div>
+
+            {/* 语音输入开关 */}
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-xs text-gray-600">语音输入</span>
+              <button
+                onClick={() => {
+                  const newValue = !settings.voiceInputEnabled;
+                  const newSettings = { ...settings, voiceInputEnabled: newValue };
+                  setSettings(newSettings);
+                  localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
+                }}
+                className={`w-10 h-5 rounded-full transition-colors relative ${
+                  settings.voiceInputEnabled ? 'bg-[#07C160]' : 'bg-gray-300'
+                }`}
+              >
+                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow ${
+                  settings.voiceInputEnabled ? 'left-5' : 'left-0.5'
+                }`} />
+              </button>
+            </div>
+
+            {settings.voiceEnabled && (
+              <>
+                <div className="mb-3">
+                  <label className="block text-xs text-gray-500 mb-1">音量 {Math.round(settings.voiceVolume * 100)}%</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={settings.voiceVolume}
+                    onChange={(e) => {
+                      const newValue = parseFloat(e.target.value);
+                      const newSettings = { ...settings, voiceVolume: newValue };
+                      setSettings(newSettings);
+                      localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
+                    }}
+                    className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+
+                <div className="mb-3">
+                  <label className="block text-xs text-gray-500 mb-1">语速 {settings.voiceRate.toFixed(1)}x</label>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="2"
+                    step="0.1"
+                    value={settings.voiceRate}
+                    onChange={(e) => {
+                      const newValue = parseFloat(e.target.value);
+                      const newSettings = { ...settings, voiceRate: newValue };
+                      setSettings(newSettings);
+                      localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
+                    }}
+                    className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* 参与者图例 */}
+            <h4 className="text-sm font-medium text-gray-700 mb-3 mt-6">参与者</h4>
+            <div className="space-y-2">
+              {currentMeeting.participants.map((p, index) => {
+                const colors = PARTICIPANT_COLORS[index % PARTICIPANT_COLORS.length];
+                return (
+                  <div key={p.characterId} className="flex items-center gap-2">
+                    <div className={`w-3 h-3 rounded-full ${colors.bg} ${colors.border} border`} />
+                    <span className="text-xs text-gray-600 truncate">{p.character.name}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

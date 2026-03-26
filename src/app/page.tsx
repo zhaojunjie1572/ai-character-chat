@@ -682,6 +682,135 @@ export default function Home() {
                     }`} />
                   </button>
                 </div>
+                {tempSettings.voiceEnabled && (
+                  <>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1.5">声音选择</label>
+                      <select
+                        value={tempSettings.voiceURI}
+                        onChange={(e) => setTempSettings({ ...tempSettings, voiceURI: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#07C160] focus:border-[#07C160] text-sm"
+                      >
+                        <option value="">默认声音</option>
+                        {availableVoices.map((voice) => (
+                          <option key={voice.voiceURI} value={voice.voiceURI}>
+                            {voice.name} ({voice.lang})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1.5">
+                        音量: {Math.round(tempSettings.voiceVolume * 100)}%
+                      </label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.1"
+                        value={tempSettings.voiceVolume}
+                        onChange={(e) => setTempSettings({ ...tempSettings, voiceVolume: parseFloat(e.target.value) })}
+                        className="w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1.5">
+                        语速: {tempSettings.voiceRate.toFixed(1)}x
+                      </label>
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="2"
+                        step="0.1"
+                        value={tempSettings.voiceRate}
+                        onChange={(e) => setTempSettings({ ...tempSettings, voiceRate: parseFloat(e.target.value) })}
+                        className="w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1.5">
+                        音调: {tempSettings.voicePitch.toFixed(1)}
+                      </label>
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="2"
+                        step="0.1"
+                        value={tempSettings.voicePitch}
+                        onChange={(e) => setTempSettings({ ...tempSettings, voicePitch: parseFloat(e.target.value) })}
+                        className="w-full"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="font-medium text-gray-900 text-sm">外观设置</h4>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1.5">聊天背景</label>
+                  {tempSettings.backgroundImage ? (
+                    <div className="space-y-2">
+                      <div className="w-full h-24 rounded-lg overflow-hidden border border-gray-300">
+                        <img
+                          src={tempSettings.backgroundImage}
+                          alt="背景预览"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <label className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm text-center cursor-pointer">
+                          更换图片
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onload = (event) => {
+                                  const result = event.target?.result as string;
+                                  setTempSettings({ ...tempSettings, backgroundImage: result });
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+                        <button
+                          onClick={() => setTempSettings({ ...tempSettings, backgroundImage: '' })}
+                          className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg text-sm"
+                        >
+                          清除
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <label className="block w-full py-4 border-2 border-dashed border-gray-300 rounded-lg text-center cursor-pointer hover:border-[#07C160] hover:bg-gray-50">
+                      <div className="flex flex-col items-center gap-1">
+                        <Upload className="w-6 h-6 text-gray-400" />
+                        <span className="text-sm text-gray-500">点击上传背景图片</span>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                              const result = event.target?.result as string;
+                              setTempSettings({ ...tempSettings, backgroundImage: result });
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-4">

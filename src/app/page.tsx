@@ -66,6 +66,8 @@ export default function Home() {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [contextMenuCharacter, setContextMenuCharacter] = useState<Character | null>(null);
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     const savedSettings = localStorage.getItem('ai_app_settings');
@@ -292,7 +294,10 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-[#EDEDED] flex flex-col">
+    <div 
+      className="min-h-screen bg-[#EDEDED] flex flex-col"
+      onClick={() => setContextMenuCharacter(null)}
+    >
       {/* 顶部导航栏 */}
       <header className="bg-[#EDEDED] border-b border-gray-300 flex items-center justify-between px-4 h-14 shrink-0">
         {showSearch ? (
@@ -440,17 +445,58 @@ export default function Home() {
                   <span className="text-base text-gray-900">新的朋友</span>
                 </div>
                 {filteredCharacters.map((character) => (
-                  <div
-                    key={character.id}
-                    onClick={() => setChattingCharacter(character)}
-                    className="flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200 active:bg-gray-100 cursor-pointer"
-                  >
+                  <div key={character.id} className="flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200">
                     <img
                       src={character.avatar}
                       alt={character.name}
                       className="w-11 h-11 rounded-lg object-cover shrink-0"
                     />
-                    <span className="text-base text-gray-900">{character.name}</span>
+                    <div 
+                      onClick={() => setChattingCharacter(character)}
+                      className="flex-1 cursor-pointer"
+                    >
+                      <span className="text-base text-gray-900">{character.name}</span>
+                    </div>
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setContextMenuCharacter(contextMenuCharacter?.id === character.id ? null : character);
+                        }}
+                        className="p-2 hover:bg-gray-100 rounded-full"
+                      >
+                        <MoreHorizontal className="w-5 h-5 text-gray-400" />
+                      </button>
+                      {contextMenuCharacter?.id === character.id && (
+                        <div className="absolute right-0 top-10 bg-white rounded-md shadow-xl py-1 min-w-[120px] z-50">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingCharacter(character);
+                              setShowForm(true);
+                              setContextMenuCharacter(null);
+                            }}
+                            className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                            编辑
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm(`确定要删除 ${character.name} 吗？`)) {
+                                deleteCharacter(character.id);
+                              }
+                              setContextMenuCharacter(null);
+                            }}
+                            className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-gray-100 flex items-center gap-2"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            删除
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </>

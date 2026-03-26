@@ -7,16 +7,53 @@ const CHAT_HISTORIES_KEY = 'ai_chat_histories';
 const CURRENT_SESSION_KEY = 'ai_current_session';
 const CHARACTER_GROUPS_KEY = 'ai_character_groups';
 
+// 安全的 localStorage 操作
+const safeStorage = {
+  getItem: (key: string): string | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      console.error(`读取 localStorage 失败 [${key}]:`, e);
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): boolean => {
+    if (typeof window === 'undefined') return false;
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch (e) {
+      console.error(`写入 localStorage 失败 [${key}]:`, e);
+      return false;
+    }
+  },
+  removeItem: (key: string): boolean => {
+    if (typeof window === 'undefined') return false;
+    try {
+      localStorage.removeItem(key);
+      return true;
+    } catch (e) {
+      console.error(`删除 localStorage 失败 [${key}]:`, e);
+      return false;
+    }
+  },
+};
+
 export const storage = {
   // 角色相关
   getCharacters: (): Character[] => {
-    if (typeof window === 'undefined') return [];
-    const data = localStorage.getItem(CHARACTERS_KEY);
-    return data ? JSON.parse(data) : [];
+    const data = safeStorage.getItem(CHARACTERS_KEY);
+    if (!data) return [];
+    try {
+      return JSON.parse(data);
+    } catch (e) {
+      console.error('解析角色数据失败:', e);
+      return [];
+    }
   },
 
   saveCharacter: (character: Character): void => {
-    if (typeof window === 'undefined') return;
     const characters = storage.getCharacters();
     const index = characters.findIndex(c => c.id === character.id);
     if (index >= 0) {
@@ -24,13 +61,12 @@ export const storage = {
     } else {
       characters.push(character);
     }
-    localStorage.setItem(CHARACTERS_KEY, JSON.stringify(characters));
+    safeStorage.setItem(CHARACTERS_KEY, JSON.stringify(characters));
   },
 
   deleteCharacter: (id: string): void => {
-    if (typeof window === 'undefined') return;
     const characters = storage.getCharacters().filter(c => c.id !== id);
-    localStorage.setItem(CHARACTERS_KEY, JSON.stringify(characters));
+    safeStorage.setItem(CHARACTERS_KEY, JSON.stringify(characters));
     // 同时删除相关聊天记录
     storage.deleteChatSession(id);
     // 删除该角色的所有历史会话
@@ -43,19 +79,22 @@ export const storage = {
 
   // 当前会话（兼容旧版本）
   getChatSession: (characterId: string): ChatSession => {
-    if (typeof window === 'undefined') return { characterId, messages: [] };
-    const data = localStorage.getItem(`${CHAT_SESSIONS_KEY}_${characterId}`);
-    return data ? JSON.parse(data) : { characterId, messages: [] };
+    const data = safeStorage.getItem(`${CHAT_SESSIONS_KEY}_${characterId}`);
+    if (!data) return { characterId, messages: [] };
+    try {
+      return JSON.parse(data);
+    } catch (e) {
+      console.error('解析会话数据失败:', e);
+      return { characterId, messages: [] };
+    }
   },
 
   saveChatSession: (session: ChatSession): void => {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem(`${CHAT_SESSIONS_KEY}_${session.characterId}`, JSON.stringify(session));
+    safeStorage.setItem(`${CHAT_SESSIONS_KEY}_${session.characterId}`, JSON.stringify(session));
   },
 
   deleteChatSession: (characterId: string): void => {
-    if (typeof window === 'undefined') return;
-    localStorage.removeItem(`${CHAT_SESSIONS_KEY}_${characterId}`);
+    safeStorage.removeItem(`${CHAT_SESSIONS_KEY}_${characterId}`);
   },
 
   addMessage: (characterId: string, message: Message): void => {
@@ -82,9 +121,9 @@ export const storage = {
 
   // 获取所有聊天记录
   getAllChatSessions: (): Record<string, ChatSession> => {
-    if (typeof window === 'undefined') return {};
     const sessions: Record<string, ChatSession> = {};
-    
+    if (typeof window === 'undefined') return sessions;
+
     // 遍历 localStorage 中所有以 ai_chat_sessions_ 开头的 key
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
@@ -102,36 +141,37 @@ export const storage = {
         }
       }
     }
-    
+
     return sessions;
   },
 
   // ========== 多会话历史记录 ==========
-  
+
   // 获取当前历史会话ID
   getCurrentHistoryId: (characterId: string): string | null => {
-    if (typeof window === 'undefined') return null;
-    const data = localStorage.getItem(`${CURRENT_SESSION_KEY}_${characterId}`);
-    return data || null;
+    return safeStorage.getItem(`${CURRENT_SESSION_KEY}_${characterId}`);
   },
 
   // 设置当前历史会话ID
   setCurrentHistoryId: (characterId: string, historyId: string): void => {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem(`${CURRENT_SESSION_KEY}_${characterId}`, historyId);
+    safeStorage.setItem(`${CURRENT_SESSION_KEY}_${characterId}`, historyId);
   },
 
   // 获取角色的所有历史会话
   getCharacterHistories: (characterId: string): ChatHistory[] => {
-    if (typeof window === 'undefined') return [];
-    const data = localStorage.getItem(`${CHAT_HISTORIES_KEY}_${characterId}`);
-    return data ? JSON.parse(data) : [];
+    const data = safeStorage.getItem(`${CHAT_HISTORIES_KEY}_${characterId}`);
+    if (!data) return [];
+    try {
+      return JSON.parse(data);
+    } catch (e) {
+      console.error('解析历史记录失败:', e);
+      return [];
+    }
   },
 
   // 保存历史会话列表
   saveCharacterHistories: (characterId: string, histories: ChatHistory[]): void => {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem(`${CHAT_HISTORIES_KEY}_${characterId}`, JSON.stringify(histories));
+    safeStorage.setItem(`${CHAT_HISTORIES_KEY}_${characterId}`, JSON.stringify(histories));
   },
 
   // 创建新会话
@@ -144,23 +184,22 @@ export const storage = {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
-    
+
     const histories = storage.getCharacterHistories(characterId);
     histories.unshift(history); // 新会话放在最前面
     storage.saveCharacterHistories(characterId, histories);
-    
+
     // 设置为当前会话
     storage.setCurrentHistoryId(characterId, history.id);
-    
+
     // 清空当前会话
     storage.clearChatHistory(characterId);
-    
+
     return history;
   },
 
   // 获取指定历史会话
   getHistory: (historyId: string): ChatHistory | null => {
-    if (typeof window === 'undefined') return null;
     // 遍历所有角色的历史会话
     const characters = storage.getCharacters();
     for (const character of characters) {
@@ -224,23 +263,26 @@ export const storage = {
 
   // 删除角色的所有历史会话
   deleteCharacterHistories: (characterId: string): void => {
-    if (typeof window === 'undefined') return;
-    localStorage.removeItem(`${CHAT_HISTORIES_KEY}_${characterId}`);
-    localStorage.removeItem(`${CURRENT_SESSION_KEY}_${characterId}`);
+    safeStorage.removeItem(`${CHAT_HISTORIES_KEY}_${characterId}`);
+    safeStorage.removeItem(`${CURRENT_SESSION_KEY}_${characterId}`);
   },
 
   // ========== 角色分组 ==========
 
   // 获取所有分组
   getCharacterGroups: (): CharacterGroup[] => {
-    if (typeof window === 'undefined') return [];
-    const data = localStorage.getItem(CHARACTER_GROUPS_KEY);
-    return data ? JSON.parse(data) : [];
+    const data = safeStorage.getItem(CHARACTER_GROUPS_KEY);
+    if (!data) return [];
+    try {
+      return JSON.parse(data);
+    } catch (e) {
+      console.error('解析分组数据失败:', e);
+      return [];
+    }
   },
 
   // 保存分组
   saveCharacterGroup: (group: CharacterGroup): void => {
-    if (typeof window === 'undefined') return;
     const groups = storage.getCharacterGroups();
     const index = groups.findIndex(g => g.id === group.id);
     if (index >= 0) {
@@ -248,14 +290,13 @@ export const storage = {
     } else {
       groups.push(group);
     }
-    localStorage.setItem(CHARACTER_GROUPS_KEY, JSON.stringify(groups));
+    safeStorage.setItem(CHARACTER_GROUPS_KEY, JSON.stringify(groups));
   },
 
   // 删除分组
   deleteCharacterGroup: (groupId: string): void => {
-    if (typeof window === 'undefined') return;
     const groups = storage.getCharacterGroups().filter(g => g.id !== groupId);
-    localStorage.setItem(CHARACTER_GROUPS_KEY, JSON.stringify(groups));
+    safeStorage.setItem(CHARACTER_GROUPS_KEY, JSON.stringify(groups));
     // 将该分组下的角色分组设为空
     const characters = storage.getCharacters();
     characters.forEach(c => {

@@ -54,21 +54,54 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
   
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [tempSettings, setTempSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
-  
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
+  // 加载可用语音列表
+  useEffect(() => {
+    const loadVoices = () => {
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        const voices = window.speechSynthesis.getVoices();
+        const chineseVoices = voices.filter(v => v.lang.includes('zh'));
+        setAvailableVoices(chineseVoices.length > 0 ? chineseVoices : voices);
+      }
+    };
+    loadVoices();
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+  }, []);
+
+  // 更新设置并持久化
+  const updateSetting = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
+    const newTempSettings = { ...tempSettings, [key]: value };
+    const newSettings = { ...settings, [key]: value };
+    setTempSettings(newTempSettings);
+    setSettings(newSettings);
+    try {
+      localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
+    } catch (e) {
+      console.error('保存设置失败:', e);
+    }
+  };
+
   // 初始化：加载设置、历史记录和当前会话
   useEffect(() => {
     // 加载设置
-    const savedSettings = localStorage.getItem('ai_app_settings');
-    if (savedSettings) {
-      const parsed = JSON.parse(savedSettings);
-      setSettings({ ...DEFAULT_SETTINGS, ...parsed });
-      setTempSettings({ ...DEFAULT_SETTINGS, ...parsed });
-      apiService.setConfig(parsed.apiKey || '', parsed.apiBaseURL, parsed.apiModel);
+    try {
+      const savedSettings = localStorage.getItem('ai_app_settings');
+      if (savedSettings) {
+        const parsed = JSON.parse(savedSettings);
+        setSettings({ ...DEFAULT_SETTINGS, ...parsed });
+        setTempSettings({ ...DEFAULT_SETTINGS, ...parsed });
+        apiService.setConfig(parsed.apiKey || '', parsed.apiBaseURL, parsed.apiModel);
+      }
+    } catch (e) {
+      console.error('加载设置失败:', e);
     }
 
     // 加载历史记录
@@ -415,7 +448,7 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
                 <div
                   key={history.id}
                   onClick={() => switchToHistory(history.id)}
-                  className={`p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 flex items-center justify-between ${
+                  className={`group p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 flex items-center justify-between ${
                     history.id === currentHistoryId ? 'bg-[#E6F7ED]' : ''
                   }`}
                 >
@@ -429,8 +462,7 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
                   </div>
                   <button
                     onClick={(e) => deleteHistory(history.id, e)}
-                    className="p-1.5 hover:bg-red-100 rounded-full ml-2 opacity-0 group-hover:opacity-100"
-                    style={{ opacity: history.id === currentHistoryId ? 1 : undefined }}
+                    className="p-1.5 hover:bg-red-100 rounded-full ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     <X className="w-4 h-4 text-gray-400 hover:text-red-500" />
                   </button>
@@ -576,12 +608,16 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
           <textarea
             ref={inputRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              // 自动调整高度
+              e.target.style.height = 'auto';
+              e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+            }}
             onKeyDown={handleKeyDown}
             placeholder="输入消息..."
             rows={1}
-            className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none outline-none focus:border-[#07C160] min-h-[36px] max-h-[120px]"
-            style={{ height: 'auto' }}
+            className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none outline-none focus:border-[#07C160] min-h-[36px] max-h-[120px] overflow-y-auto"
           />
 
           {input.trim() ? (
@@ -600,23 +636,17 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
                   className={`p-2 rounded-full transition-colors shrink-0 ${
                     isListening ? 'bg-red-500 text-white' : 'hover:bg-gray-200'
                   }`}
+                  title={isListening ? '停止语音输入' : '开始语音输入'}
                 >
                   <Mic className={`w-6 h-6 ${isListening ? 'text-white' : 'text-gray-600'}`} />
                 </button>
               )}
               
-              <button
-                onClick={() => setShowSettings(true)}
-                className="p-2 hover:bg-gray-200 rounded-full transition-colors shrink-0"
-                title="语音设置"
-              >
-                <Volume2 className="w-6 h-6 text-gray-600" />
-              </button>
-              
               {isSpeaking && (
                 <button
                   onClick={stopSpeaking}
                   className="p-2 hover:bg-gray-200 rounded-full transition-colors shrink-0"
+                  title="停止朗读"
                 >
                   <VolumeX className="w-6 h-6 text-red-500" />
                 </button>
@@ -644,13 +674,7 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-700">语音朗读</span>
                 <button
-                  onClick={() => {
-                    const newValue = !tempSettings.voiceEnabled;
-                    setTempSettings({ ...tempSettings, voiceEnabled: newValue });
-                    const newSettings = { ...settings, voiceEnabled: newValue };
-                    setSettings(newSettings);
-                    localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
-                  }}
+                  onClick={() => updateSetting('voiceEnabled', !tempSettings.voiceEnabled)}
                   className={`w-12 h-7 rounded-full transition-colors relative ${
                     tempSettings.voiceEnabled ? 'bg-[#07C160]' : 'bg-gray-300'
                   }`}
@@ -664,13 +688,7 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-700">语音输入</span>
                 <button
-                  onClick={() => {
-                    const newValue = !tempSettings.voiceInputEnabled;
-                    setTempSettings({ ...tempSettings, voiceInputEnabled: newValue });
-                    const newSettings = { ...settings, voiceInputEnabled: newValue };
-                    setSettings(newSettings);
-                    localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
-                  }}
+                  onClick={() => updateSetting('voiceInputEnabled', !tempSettings.voiceInputEnabled)}
                   className={`w-12 h-7 rounded-full transition-colors relative ${
                     tempSettings.voiceInputEnabled ? 'bg-[#07C160]' : 'bg-gray-300'
                   }`}
@@ -682,90 +700,62 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
               </div>
 
               {tempSettings.voiceEnabled && (
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1.5">音量: {Math.round(tempSettings.voiceVolume * 100)}%</label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.1"
-                    value={tempSettings.voiceVolume}
-                    onChange={(e) => {
-                      const newValue = parseFloat(e.target.value);
-                      setTempSettings({ ...tempSettings, voiceVolume: newValue });
-                      const newSettings = { ...settings, voiceVolume: newValue };
-                      setSettings(newSettings);
-                      localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
-                    }}
-                    className="w-full"
-                  />
-                </div>
-              )}
+                <>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1.5">音量: {Math.round(tempSettings.voiceVolume * 100)}%</label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      value={tempSettings.voiceVolume}
+                      onChange={(e) => updateSetting('voiceVolume', parseFloat(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
 
-              {tempSettings.voiceEnabled && (
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1.5">语速: {tempSettings.voiceRate.toFixed(1)}x</label>
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="2"
-                    step="0.1"
-                    value={tempSettings.voiceRate}
-                    onChange={(e) => {
-                      const newValue = parseFloat(e.target.value);
-                      setTempSettings({ ...tempSettings, voiceRate: newValue });
-                      const newSettings = { ...settings, voiceRate: newValue };
-                      setSettings(newSettings);
-                      localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
-                    }}
-                    className="w-full"
-                  />
-                </div>
-              )}
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1.5">语速: {tempSettings.voiceRate.toFixed(1)}x</label>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2"
+                      step="0.1"
+                      value={tempSettings.voiceRate}
+                      onChange={(e) => updateSetting('voiceRate', parseFloat(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
 
-              {tempSettings.voiceEnabled && (
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1.5">音调: {tempSettings.voicePitch.toFixed(1)}</label>
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="2"
-                    step="0.1"
-                    value={tempSettings.voicePitch}
-                    onChange={(e) => {
-                      const newValue = parseFloat(e.target.value);
-                      setTempSettings({ ...tempSettings, voicePitch: newValue });
-                      const newSettings = { ...settings, voicePitch: newValue };
-                      setSettings(newSettings);
-                      localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
-                    }}
-                    className="w-full"
-                  />
-                </div>
-              )}
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1.5">音调: {tempSettings.voicePitch.toFixed(1)}</label>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2"
+                      step="0.1"
+                      value={tempSettings.voicePitch}
+                      onChange={(e) => updateSetting('voicePitch', parseFloat(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
 
-              {tempSettings.voiceEnabled && (
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1.5">选择声音</label>
-                  <select
-                    value={tempSettings.voiceURI}
-                    onChange={(e) => {
-                      const newValue = e.target.value;
-                      setTempSettings({ ...tempSettings, voiceURI: newValue });
-                      const newSettings = { ...settings, voiceURI: newValue };
-                      setSettings(newSettings);
-                      localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-[#07C160] focus:outline-none"
-                  >
-                    <option value="">默认声音</option>
-                    {typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.getVoices().map((voice) => (
-                      <option key={voice.voiceURI} value={voice.voiceURI}>
-                        {voice.name} ({voice.lang})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1.5">选择声音</label>
+                    <select
+                      value={tempSettings.voiceURI}
+                      onChange={(e) => updateSetting('voiceURI', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-[#07C160] focus:outline-none"
+                    >
+                      <option value="">默认声音</option>
+                      {availableVoices.map((voice) => (
+                        <option key={voice.voiceURI} value={voice.voiceURI}>
+                          {voice.name} ({voice.lang})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
               )}
             </div>
             

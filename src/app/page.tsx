@@ -394,10 +394,26 @@ export default function Home() {
 
   const hasApiKey = !!apiSettings.apiKey;
 
+  // 关闭更多菜单当点击外部时
+  useEffect(() => {
+    if (!showMoreMenu) return;
+    const handleClick = () => setShowMoreMenu(false);
+    const timer = setTimeout(() => {
+      document.addEventListener('click', handleClick, { once: true });
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('click', handleClick);
+    };
+  }, [showMoreMenu]);
+
   if (!isLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#EDEDED]">
-        <div className="text-gray-500">加载中...</div>
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-gray-300 border-t-[#07C160] rounded-full animate-spin" />
+          <div className="text-gray-500 text-sm">加载中...</div>
+        </div>
       </div>
     );
   }

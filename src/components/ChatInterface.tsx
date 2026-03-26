@@ -484,7 +484,7 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
                 className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
               />
               <div className="flex flex-col gap-1 max-w-[75%]">
-                <div className="relative">
+                <div className="relative group">
                   <div
                     className={`px-3 py-2.5 text-sm leading-relaxed ${
                       message.role === 'user'
@@ -503,6 +503,16 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
                   >
                     <p className="whitespace-pre-wrap">{message.content}</p>
                   </div>
+                  {/* 语音朗读按钮 - 仅角色消息显示 */}
+                  {message.role === 'assistant' && (
+                    <button
+                      onClick={() => speakMessage(message.content)}
+                      className="absolute -right-8 top-1/2 -translate-y-1/2 p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="朗读消息"
+                    >
+                      <Volume2 className="w-4 h-4 text-gray-400 hover:text-[#07C160]" />
+                    </button>
+                  )}
                   {!settings.backgroundImage && (
                     <div
                       className={`absolute top-3 w-2 h-2 ${
@@ -594,6 +604,14 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
                   <Mic className={`w-6 h-6 ${isListening ? 'text-white' : 'text-gray-600'}`} />
                 </button>
               )}
+              
+              <button
+                onClick={() => setShowSettings(true)}
+                className="p-2 hover:bg-gray-200 rounded-full transition-colors shrink-0"
+                title="语音设置"
+              >
+                <Volume2 className="w-6 h-6 text-gray-600" />
+              </button>
               
               {isSpeaking && (
                 <button
@@ -723,6 +741,30 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
                     }}
                     className="w-full"
                   />
+                </div>
+              )}
+
+              {tempSettings.voiceEnabled && (
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1.5">选择声音</label>
+                  <select
+                    value={tempSettings.voiceURI}
+                    onChange={(e) => {
+                      const newValue = e.target.value;
+                      setTempSettings({ ...tempSettings, voiceURI: newValue });
+                      const newSettings = { ...settings, voiceURI: newValue };
+                      setSettings(newSettings);
+                      localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-[#07C160] focus:outline-none"
+                  >
+                    <option value="">默认声音</option>
+                    {typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.getVoices().map((voice) => (
+                      <option key={voice.voiceURI} value={voice.voiceURI}>
+                        {voice.name} ({voice.lang})
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
             </div>

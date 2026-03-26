@@ -5,8 +5,17 @@ export interface Character {
   avatar: string;
   description: string;
   systemPrompt: string;
+  group?: string; // 角色分组
   createdAt: number;
   updatedAt: number;
+}
+
+// 角色分组
+export interface CharacterGroup {
+  id: string;
+  name: string;
+  color: string;
+  createdAt: number;
 }
 
 export interface Message {

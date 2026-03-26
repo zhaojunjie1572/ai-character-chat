@@ -1,10 +1,11 @@
-import { Character, Message, ChatSession, ChatHistory } from '@/types/character';
+import { Character, Message, ChatSession, ChatHistory, CharacterGroup } from '@/types/character';
 import { v4 as uuidv4 } from 'uuid';
 
 const CHARACTERS_KEY = 'ai_characters';
 const CHAT_SESSIONS_KEY = 'ai_chat_sessions';
 const CHAT_HISTORIES_KEY = 'ai_chat_histories';
 const CURRENT_SESSION_KEY = 'ai_current_session';
+const CHARACTER_GROUPS_KEY = 'ai_character_groups';
 
 export const storage = {
   // 角色相关
@@ -226,5 +227,52 @@ export const storage = {
     if (typeof window === 'undefined') return;
     localStorage.removeItem(`${CHAT_HISTORIES_KEY}_${characterId}`);
     localStorage.removeItem(`${CURRENT_SESSION_KEY}_${characterId}`);
+  },
+
+  // ========== 角色分组 ==========
+
+  // 获取所有分组
+  getCharacterGroups: (): CharacterGroup[] => {
+    if (typeof window === 'undefined') return [];
+    const data = localStorage.getItem(CHARACTER_GROUPS_KEY);
+    return data ? JSON.parse(data) : [];
+  },
+
+  // 保存分组
+  saveCharacterGroup: (group: CharacterGroup): void => {
+    if (typeof window === 'undefined') return;
+    const groups = storage.getCharacterGroups();
+    const index = groups.findIndex(g => g.id === group.id);
+    if (index >= 0) {
+      groups[index] = group;
+    } else {
+      groups.push(group);
+    }
+    localStorage.setItem(CHARACTER_GROUPS_KEY, JSON.stringify(groups));
+  },
+
+  // 删除分组
+  deleteCharacterGroup: (groupId: string): void => {
+    if (typeof window === 'undefined') return;
+    const groups = storage.getCharacterGroups().filter(g => g.id !== groupId);
+    localStorage.setItem(CHARACTER_GROUPS_KEY, JSON.stringify(groups));
+    // 将该分组下的角色分组设为空
+    const characters = storage.getCharacters();
+    characters.forEach(c => {
+      if (c.group === groupId) {
+        c.group = undefined;
+        storage.saveCharacter(c);
+      }
+    });
+  },
+
+  // 按分组获取角色
+  getCharactersByGroup: (groupId: string): Character[] => {
+    return storage.getCharacters().filter(c => c.group === groupId);
+  },
+
+  // 获取未分组的角色
+  getUngroupedCharacters: (): Character[] => {
+    return storage.getCharacters().filter(c => !c.group);
   },
 };

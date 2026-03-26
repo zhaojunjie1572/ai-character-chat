@@ -109,7 +109,10 @@ export default function Home() {
   };
 
   const handleSyncToGist = async () => {
-    if (!apiSettings.gistToken) {
+    // 使用 tempSettings 中的值，这样用户修改后可以立即同步
+    const currentSettings = { ...apiSettings, ...tempSettings };
+    
+    if (!currentSettings.gistToken) {
       setSyncError('请先配置 GitHub Token');
       return;
     }
@@ -119,15 +122,15 @@ export default function Home() {
     setSyncMessage('');
 
     try {
-      gistSyncService.setConfig(apiSettings.gistToken, apiSettings.gistId);
+      gistSyncService.setConfig(currentSettings.gistToken, currentSettings.gistId);
       const chatSessions = getAllChatSessions();
-      const data = gistSyncService.prepareSyncData(characters, chatSessions, apiSettings);
+      const data = gistSyncService.prepareSyncData(characters, chatSessions, currentSettings);
       
-      let gistId: string | null = apiSettings.gistId;
+      let gistId: string | null = currentSettings.gistId;
       if (!gistId) {
         gistId = await gistSyncService.createGist(data);
         if (gistId) {
-          const newSettings = { ...apiSettings, gistId };
+          const newSettings = { ...currentSettings, gistId };
           setApiSettings(newSettings);
           setTempSettings(newSettings);
           localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
@@ -148,7 +151,10 @@ export default function Home() {
   };
 
   const handleRestoreFromGist = async () => {
-    if (!apiSettings.gistToken || !apiSettings.gistId) {
+    // 使用 tempSettings 中的值
+    const currentSettings = { ...apiSettings, ...tempSettings };
+    
+    if (!currentSettings.gistToken || !currentSettings.gistId) {
       setSyncError('请先配置 GitHub Token 和 Gist ID');
       return;
     }
@@ -158,7 +164,7 @@ export default function Home() {
     setSyncMessage('');
 
     try {
-      gistSyncService.setConfig(apiSettings.gistToken, apiSettings.gistId);
+      gistSyncService.setConfig(currentSettings.gistToken, currentSettings.gistId);
       const data = await gistSyncService.fetchGist();
 
       if (data && (data.characters || data.settings || data.chatSessions)) {

@@ -642,7 +642,7 @@ export default function Home() {
                               <MoreHorizontal className="w-5 h-5 text-gray-400" />
                             </button>
                             {contextMenuCharacter?.id === character.id && (
-                              <div className="absolute right-0 top-10 bg-white rounded-md shadow-xl py-1 min-w-[120px] z-50">
+                              <div className="absolute right-0 top-10 bg-white rounded-md shadow-xl py-1 min-w-[160px] z-50">
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -655,6 +655,51 @@ export default function Home() {
                                   <Edit3 className="w-4 h-4" />
                                   编辑
                                 </button>
+                                {/* 分组选项 */}
+                                <div className="border-t border-gray-100 my-1" />
+                                <div className="px-4 py-2 text-xs text-gray-500">移动到分组</div>
+                                {groups.map(g => (
+                                  <button
+                                    key={g.id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const updatedChar = { ...character, group: g.id };
+                                      storage.saveCharacter(updatedChar);
+                                      // 刷新角色列表
+                                      window.location.reload();
+                                    }}
+                                    className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${
+                                      character.group === g.id 
+                                        ? 'bg-blue-50 text-blue-600' 
+                                        : 'text-gray-700 hover:bg-gray-100'
+                                    }`}
+                                  >
+                                    <div 
+                                      className="w-2 h-2 rounded-full" 
+                                      style={{ backgroundColor: g.color }}
+                                    />
+                                    {g.name}
+                                    {character.group === g.id && <span className="ml-auto text-xs">✓</span>}
+                                  </button>
+                                ))}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const updatedChar = { ...character, group: undefined };
+                                    storage.saveCharacter(updatedChar);
+                                    window.location.reload();
+                                  }}
+                                  className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${
+                                    !character.group 
+                                      ? 'bg-blue-50 text-blue-600' 
+                                      : 'text-gray-700 hover:bg-gray-100'
+                                  }`}
+                                >
+                                  <div className="w-2 h-2 rounded-full bg-gray-400" />
+                                  未分组
+                                  {!character.group && <span className="ml-auto text-xs">✓</span>}
+                                </button>
+                                <div className="border-t border-gray-100 my-1" />
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -709,7 +754,7 @@ export default function Home() {
                             <MoreHorizontal className="w-5 h-5 text-gray-400" />
                           </button>
                           {contextMenuCharacter?.id === character.id && (
-                            <div className="absolute right-0 top-10 bg-white rounded-md shadow-xl py-1 min-w-[120px] z-50">
+                            <div className="absolute right-0 top-10 bg-white rounded-md shadow-xl py-1 min-w-[160px] z-50">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -722,6 +767,50 @@ export default function Home() {
                                 <Edit3 className="w-4 h-4" />
                                 编辑
                               </button>
+                              {/* 分组选项 */}
+                              <div className="border-t border-gray-100 my-1" />
+                              <div className="px-4 py-2 text-xs text-gray-500">移动到分组</div>
+                              {groups.map(g => (
+                                <button
+                                  key={g.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const updatedChar = { ...character, group: g.id };
+                                    storage.saveCharacter(updatedChar);
+                                    window.location.reload();
+                                  }}
+                                  className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${
+                                    character.group === g.id 
+                                      ? 'bg-blue-50 text-blue-600' 
+                                      : 'text-gray-700 hover:bg-gray-100'
+                                  }`}
+                                >
+                                  <div 
+                                    className="w-2 h-2 rounded-full" 
+                                    style={{ backgroundColor: g.color }}
+                                  />
+                                  {g.name}
+                                  {character.group === g.id && <span className="ml-auto text-xs">✓</span>}
+                                </button>
+                              ))}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const updatedChar = { ...character, group: undefined };
+                                  storage.saveCharacter(updatedChar);
+                                  window.location.reload();
+                                }}
+                                className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${
+                                  !character.group 
+                                    ? 'bg-blue-50 text-blue-600' 
+                                    : 'text-gray-700 hover:bg-gray-100'
+                                }`}
+                              >
+                                <div className="w-2 h-2 rounded-full bg-gray-400" />
+                                未分组
+                                {!character.group && <span className="ml-auto text-xs">✓</span>}
+                              </button>
+                              <div className="border-t border-gray-100 my-1" />
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();

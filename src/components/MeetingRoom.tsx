@@ -855,12 +855,12 @@ ${contextText || '（刚开始讨论）'}
     }, 2000);
   };
 
-  // 开始新会议（保留参与者，清空消息）
-  const handleNewMeeting = () => {
+  // 开始新议题（保留参与者，清空消息）
+  const handleNewTopic = () => {
     if (!currentMeeting) return;
 
     if (currentMeeting.messages.length > 0) {
-      if (!confirm('确定要开始新会议吗？当前会议记录已自动保存。')) {
+      if (!confirm('确定要开始新议题吗？当前会议记录已自动保存。')) {
         return;
       }
     }
@@ -882,7 +882,7 @@ ${contextText || '（刚开始讨论）'}
     // 显示提示
     const toast = document.createElement('div');
     toast.className = 'fixed top-20 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 text-sm';
-    toast.textContent = '新会议已开始';
+    toast.textContent = '新议题已开始';
     document.body.appendChild(toast);
     setTimeout(() => {
       document.body.removeChild(toast);
@@ -957,14 +957,14 @@ ${contextText || '（刚开始讨论）'}
         {currentMeeting && (
           <>
             {/* 风暴模式按钮 */}
-            {/* 新会议按钮 */}
+            {/* 新议题按钮 */}
             <button
-              onClick={handleNewMeeting}
+              onClick={handleNewTopic}
               className="flex items-center gap-1 px-3 py-1.5 mr-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors"
-              title="开始新会议（保留参与者，清空消息）"
+              title="开始新议题（保留参与者，清空消息）"
             >
               <Plus className="w-4 h-4" />
-              新会议
+              新议题
             </button>
 
             {!stormMode ? (

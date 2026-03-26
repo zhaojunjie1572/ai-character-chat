@@ -430,7 +430,10 @@ export default function Home() {
               </div>
             ) : (
               <>
-                <div className="flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200">
+                <div 
+                  onClick={() => setShowForm(true)}
+                  className="flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200 active:bg-gray-100 cursor-pointer"
+                >
                   <div className="w-11 h-11 bg-[#07C160] rounded-lg flex items-center justify-center shrink-0">
                     <PlusIcon className="w-6 h-6 text-white" />
                   </div>

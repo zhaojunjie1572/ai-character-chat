@@ -98,14 +98,7 @@ export default function Home() {
   };
 
   const getAllChatSessions = () => {
-    const sessions: Record<string, any> = {};
-    characters.forEach(c => {
-      const session = storage.getChatSession(c.id);
-      if (session.messages.length > 0) {
-        sessions[c.id] = session;
-      }
-    });
-    return sessions;
+    return storage.getAllChatSessions();
   };
 
   const handleSyncToGist = async () => {

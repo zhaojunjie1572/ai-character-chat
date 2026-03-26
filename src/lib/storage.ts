@@ -63,4 +63,30 @@ export const storage = {
     session.messages = [];
     storage.saveChatSession(session);
   },
+
+  // 获取所有聊天记录
+  getAllChatSessions: (): Record<string, ChatSession> => {
+    if (typeof window === 'undefined') return {};
+    const sessions: Record<string, ChatSession> = {};
+    
+    // 遍历 localStorage 中所有以 ai_chat_sessions_ 开头的 key
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(`${CHAT_SESSIONS_KEY}_`)) {
+        try {
+          const data = localStorage.getItem(key);
+          if (data) {
+            const session: ChatSession = JSON.parse(data);
+            if (session.messages && session.messages.length > 0) {
+              sessions[session.characterId] = session;
+            }
+          }
+        } catch (e) {
+          console.error('解析聊天记录失败:', key, e);
+        }
+      }
+    }
+    
+    return sessions;
+  },
 };

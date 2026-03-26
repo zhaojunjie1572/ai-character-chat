@@ -149,18 +149,40 @@ export default function Home() {
       gistSyncService.setConfig(apiSettings.gistToken, apiSettings.gistId);
       const data = await gistSyncService.fetchGist();
 
-      if (data && data.characters) {
-        if (confirm(`找到 ${data.characters.length} 个角色，是否恢复？`)) {
-          characters.forEach(c => deleteCharacter(c.id));
-          data.characters.forEach((c: Character) => {
-            addCharacter({
-              name: c.name,
-              title: c.title,
-              description: c.description,
-              avatar: c.avatar,
-              systemPrompt: c.systemPrompt,
+      if (data && (data.characters || data.settings)) {
+        const hasCharacters = data.characters && data.characters.length > 0;
+        const hasSettings = data.settings && Object.keys(data.settings).length > 0;
+        
+        let message = '找到数据，是否恢复？';
+        if (hasCharacters && hasSettings) {
+          message = `找到 ${data.characters.length} 个角色和设置，是否恢复？`;
+        } else if (hasCharacters) {
+          message = `找到 ${data.characters.length} 个角色，是否恢复？`;
+        } else if (hasSettings) {
+          message = '找到设置，是否恢复？';
+        }
+
+        if (confirm(message)) {
+          if (hasCharacters) {
+            characters.forEach(c => deleteCharacter(c.id));
+            data.characters.forEach((c: Character) => {
+              addCharacter({
+                name: c.name,
+                title: c.title,
+                description: c.description,
+                avatar: c.avatar,
+                systemPrompt: c.systemPrompt,
+              });
             });
-          });
+          }
+
+          if (hasSettings) {
+            const restoredSettings = { ...DEFAULT_SETTINGS, ...data.settings };
+            setApiSettings(restoredSettings);
+            setTempSettings(restoredSettings);
+            localStorage.setItem('ai_app_settings', JSON.stringify(restoredSettings));
+          }
+
           setSyncMessage('恢复成功！');
           setTimeout(() => setSyncMessage(''), 3000);
         }

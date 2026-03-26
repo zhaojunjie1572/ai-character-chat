@@ -165,6 +165,7 @@ export class GistSyncService {
         ...settings,
         // 不同步敏感信息
         apiKey: settings.apiKey ? '***encrypted***' : '',
+        gistToken: settings.gistToken ? '***encrypted***' : '',
       },
       version: DATA_VERSION,
       lastSync: Date.now(),

@@ -107,6 +107,27 @@ export const meetingStorage = {
     return newMessage;
   },
 
+  // 删除单条消息
+  deleteMessage: (meetingId: string, messageId: string): void => {
+    const meeting = meetingStorage.getMeeting(meetingId);
+    if (!meeting) throw new Error('会议室不存在');
+
+    meeting.messages = meeting.messages.filter(m => m.id !== messageId);
+    meeting.updatedAt = Date.now();
+    meetingStorage.updateMeeting(meeting);
+  },
+
+  // 清空所有消息
+  clearAllMessages: (meetingId: string): void => {
+    const meeting = meetingStorage.getMeeting(meetingId);
+    if (!meeting) throw new Error('会议室不存在');
+
+    meeting.messages = [];
+    meeting.currentRound = 1;
+    meeting.updatedAt = Date.now();
+    meetingStorage.updateMeeting(meeting);
+  },
+
   // 进入下一轮
   nextRound: (meetingId: string): void => {
     const meeting = meetingStorage.getMeeting(meetingId);

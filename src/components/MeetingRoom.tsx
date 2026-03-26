@@ -5,7 +5,7 @@ import { Character } from '@/types/character';
 import { MeetingSession, MeetingParticipant, MeetingMessage } from '@/types/meeting';
 import { meetingStorage } from '@/lib/meetingStorage';
 import { apiService } from '@/lib/api';
-import { X, Plus, Users, MessageCircle, Download, ChevronRight, ChevronLeft, Settings, Play, Square, Mic, Volume2, VolumeX, Zap } from 'lucide-react';
+import { X, Plus, Users, MessageCircle, Download, ChevronRight, ChevronLeft, Settings, Play, Square, Mic, Volume2, VolumeX, Zap, Trash2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 interface MeetingRoomProps {
@@ -706,6 +706,30 @@ ${contextText || '（刚开始讨论）'}
     URL.revokeObjectURL(url);
   };
 
+  // 删除单条消息
+  const handleDeleteMessage = (messageId: string) => {
+    if (!currentMeeting) return;
+    if (confirm('确定要删除这条消息吗？')) {
+      meetingStorage.deleteMessage(currentMeeting.id, messageId);
+      const updatedMeeting = meetingStorage.getMeeting(currentMeeting.id);
+      if (updatedMeeting) {
+        setCurrentMeeting(updatedMeeting);
+      }
+    }
+  };
+
+  // 清空所有消息
+  const handleClearAllMessages = () => {
+    if (!currentMeeting) return;
+    if (confirm('确定要清空所有消息吗？此操作不可恢复。')) {
+      meetingStorage.clearAllMessages(currentMeeting.id);
+      const updatedMeeting = meetingStorage.getMeeting(currentMeeting.id);
+      if (updatedMeeting) {
+        setCurrentMeeting(updatedMeeting);
+      }
+    }
+  };
+
   const toggleParticipant = (characterId: string) => {
     setSelectedParticipants(prev => {
       if (prev.includes(characterId)) {
@@ -796,6 +820,16 @@ ${contextText || '（刚开始讨论）'}
             >
               <Download className="w-5 h-5 text-gray-600" />
             </button>
+            
+            {/* 清空所有消息按钮 */}
+            <button
+              onClick={handleClearAllMessages}
+              className="p-2 hover:bg-red-100 rounded-full transition-colors mr-1"
+              title="清空所有消息"
+            >
+              <Trash2 className="w-5 h-5 text-red-500" />
+            </button>
+            
             <button
               onClick={() => { 
                 setCurrentMeeting(null); 
@@ -1248,9 +1282,10 @@ ${contextText || '（刚开始讨论）'}
                           )}
                         </div>
                         
-                        {/* 语音朗读按钮和询问他人（仅角色消息） */}
-                        {message.role !== 'user' && (
-                          <div className="flex items-center gap-1 mt-1">
+                        {/* 消息操作按钮 */}
+                        <div className="flex items-center gap-1 mt-1">
+                          {/* 语音朗读按钮（仅角色消息） */}
+                          {message.role !== 'user' && (
                             <button
                               onClick={() => isSpeakingThis ? stopSpeaking() : speakMessage(message.content, message.id)}
                               className={`p-1 rounded-full transition-colors ${
@@ -1266,8 +1301,10 @@ ${contextText || '（刚开始讨论）'}
                                 <Volume2 className="w-3.5 h-3.5" />
                               )}
                             </button>
-                            
-                            {/* 询问他人按钮 */}
+                          )}
+                          
+                          {/* 询问他人按钮（仅角色消息） */}
+                          {message.role !== 'user' && (
                             <button
                               onClick={() => {
                                 setDebateTarget({
@@ -1287,8 +1324,17 @@ ${contextText || '（刚开始讨论）'}
                             >
                               <MessageCircle className="w-3.5 h-3.5" />
                             </button>
-                          </div>
-                        )}
+                          )}
+                          
+                          {/* 删除消息按钮（所有消息） */}
+                          <button
+                            onClick={() => handleDeleteMessage(message.id)}
+                            className="p-1 rounded-full hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
+                            title="删除此消息"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );

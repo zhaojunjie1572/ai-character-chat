@@ -22,6 +22,7 @@ interface AppSettings {
   voiceVolume: number;
   voiceRate: number;
   voicePitch: number;
+  voiceURI: string;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -33,6 +34,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   voiceVolume: 1,
   voiceRate: 1,
   voicePitch: 1,
+  voiceURI: '',
 };
 
 // 为参与者分配的颜色方案
@@ -58,6 +60,7 @@ export function MeetingRoom({ characters, onClose }: MeetingRoomProps) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
 
   // 创建表单状态
   const [meetingTitle, setMeetingTitle] = useState('');
@@ -84,6 +87,16 @@ export function MeetingRoom({ characters, onClose }: MeetingRoomProps) {
     }
     // 调试：检查 characters
     console.log('MeetingRoom characters:', characters);
+
+    // 加载可用的语音列表
+    const loadVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      const chineseVoices = voices.filter(v => v.lang.includes('zh'));
+      setAvailableVoices(chineseVoices.length > 0 ? chineseVoices : voices);
+    };
+
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
   }, [characters]);
 
   // 初始化语音识别
@@ -146,6 +159,14 @@ export function MeetingRoom({ characters, onClose }: MeetingRoomProps) {
     utterance.volume = settings.voiceVolume;
     utterance.rate = settings.voiceRate;
     utterance.pitch = settings.voicePitch;
+    
+    // 使用选中的声音
+    if (settings.voiceURI) {
+      const selectedVoice = availableVoices.find(v => v.voiceURI === settings.voiceURI);
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
+    }
     
     utterance.onstart = () => {
       setIsSpeaking(true);
@@ -924,6 +945,28 @@ ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
 
             {settings.voiceEnabled && (
               <>
+                {/* 声音选择 */}
+                <div className="mb-3">
+                  <label className="block text-xs text-gray-500 mb-1">声音选择</label>
+                  <select
+                    value={settings.voiceURI}
+                    onChange={(e) => {
+                      const newValue = e.target.value;
+                      const newSettings = { ...settings, voiceURI: newValue };
+                      setSettings(newSettings);
+                      localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
+                    }}
+                    className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#07C160] focus:border-[#07C160] bg-white"
+                  >
+                    <option value="">默认声音</option>
+                    {availableVoices.map((voice) => (
+                      <option key={voice.voiceURI} value={voice.voiceURI}>
+                        {voice.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="mb-3">
                   <label className="block text-xs text-gray-500 mb-1">音量 {Math.round(settings.voiceVolume * 100)}%</label>
                   <input

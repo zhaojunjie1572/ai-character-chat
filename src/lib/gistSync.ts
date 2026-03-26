@@ -30,7 +30,7 @@ export class GistSyncService {
       const response = await fetch('https://api.github.com/gists', {
         method: 'POST',
         headers: {
-          'Authorization': `token ${this.token}`,
+          'Authorization': `Bearer ${this.token}`,
           'Content-Type': 'application/json',
           'Accept': 'application/vnd.github.v3+json',
         },
@@ -68,7 +68,7 @@ export class GistSyncService {
       const response = await fetch(`https://api.github.com/gists/${this.gistId}`, {
         method: 'PATCH',
         headers: {
-          'Authorization': `token ${this.token}`,
+          'Authorization': `Bearer ${this.token}`,
           'Content-Type': 'application/json',
           'Accept': 'application/vnd.github.v3+json',
         },
@@ -103,7 +103,7 @@ export class GistSyncService {
     try {
       const response = await fetch(`https://api.github.com/gists/${this.gistId}`, {
         headers: {
-          'Authorization': `token ${this.token}`,
+          'Authorization': `Bearer ${this.token}`,
           'Accept': 'application/vnd.github.v3+json',
         },
       });
@@ -132,7 +132,7 @@ export class GistSyncService {
     try {
       const response = await fetch('https://api.github.com/gists', {
         headers: {
-          'Authorization': `token ${this.token}`,
+          'Authorization': `Bearer ${this.token}`,
           'Accept': 'application/vnd.github.v3+json',
         },
       });

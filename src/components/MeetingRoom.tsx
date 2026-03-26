@@ -174,13 +174,38 @@ export function MeetingRoom({ characters, onClose }: MeetingRoomProps) {
     return PARTICIPANT_COLORS[getParticipantColorIndex(characterId)];
   };
 
+  // 清理文本，移除 Markdown 标记和特殊符号
+  const cleanTextForSpeech = (text: string): string => {
+    return text
+      // 移除 Markdown 强调标记
+      .replace(/\*\*(.+?)\*\*/g, '$1')  // **粗体**
+      .replace(/\*(.+?)\*/g, '$1')      // *斜体*
+      .replace(/__(.+?)__/g, '$1')      // __粗体__
+      .replace(/_(.+?)_/g, '$1')        // _斜体_
+      // 移除代码块
+      .replace(/```[\s\S]*?```/g, '代码块')
+      .replace(/`(.+?)`/g, '$1')
+      // 移除链接，保留文本
+      .replace(/\[(.+?)\]\(.+?\)/g, '$1')
+      // 移除 HTML 标签
+      .replace(/<[^>]+>/g, '')
+      // 移除 URL
+      .replace(/https?:\/\/\S+/g, '链接')
+      // 移除多余的换行和空格
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  };
+
   // 文字转语音
   const speakMessage = (text: string, messageId: string) => {
     if (!window.speechSynthesis) return;
     
     window.speechSynthesis.cancel();
     
-    const utterance = new SpeechSynthesisUtterance(text);
+    // 清理文本
+    const cleanedText = cleanTextForSpeech(text);
+    
+    const utterance = new SpeechSynthesisUtterance(cleanedText);
     utterance.lang = 'zh-CN';
     utterance.volume = settings.voiceVolume;
     utterance.rate = settings.voiceRate;

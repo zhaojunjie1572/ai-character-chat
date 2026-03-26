@@ -363,24 +363,35 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
                   <div
                     className={`px-3 py-2.5 text-sm leading-relaxed ${
                       message.role === 'user'
-                        ? 'bg-[#95EC69] text-gray-900 rounded-tl-xl rounded-tr-md rounded-bl-xl rounded-br-md'
-                        : 'bg-white text-gray-900 rounded-tl-md rounded-tr-xl rounded-bl-md rounded-br-xl shadow-sm'
-                    }`}
+                        ? (settings.backgroundImage 
+                            ? 'text-white text-shadow-md' 
+                            : 'bg-[#95EC69] text-gray-900')
+                        : (settings.backgroundImage 
+                            ? 'text-white text-shadow-md' 
+                            : 'bg-white text-gray-900 shadow-sm')
+                    } rounded-tl-xl rounded-tr-md rounded-bl-xl rounded-br-md`}
+                    style={
+                      settings.backgroundImage
+                        ? { textShadow: '0 1px 3px rgba(0,0,0,0.8)' }
+                        : undefined
+                    }
                   >
                     <p className="whitespace-pre-wrap">{message.content}</p>
                   </div>
-                  <div
-                    className={`absolute top-3 w-2 h-2 ${
-                      message.role === 'user'
-                        ? 'right-[-4px] bg-[#95EC69]'
-                        : 'left-[-4px] bg-white'
-                    }`}
-                    style={{
-                      clipPath: message.role === 'user' 
-                        ? 'polygon(0 50%, 100% 0, 100% 100%)'
-                        : 'polygon(100% 50%, 0 0, 0 100%)'
-                    }}
-                  />
+                  {!settings.backgroundImage && (
+                    <div
+                      className={`absolute top-3 w-2 h-2 ${
+                        message.role === 'user'
+                          ? 'right-[-4px] bg-[#95EC69]'
+                          : 'left-[-4px] bg-white'
+                      }`}
+                      style={{
+                        clipPath: message.role === 'user' 
+                          ? 'polygon(0 50%, 100% 0, 100% 100%)'
+                          : 'polygon(100% 50%, 0 0, 0 100%)'
+                      }}
+                    />
+                  )}
                 </div>
                 <div className={`flex items-center gap-2 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <span className="text-xs text-gray-400">
@@ -408,14 +419,16 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
               className="w-10 h-10 rounded-lg object-cover"
             />
             <div className="relative">
-              <div className="bg-white px-3 py-2.5 rounded-tl-md rounded-tr-xl rounded-bl-md rounded-br-xl shadow-sm">
+              <div className={`px-3 py-2.5 rounded-tl-md rounded-tr-xl rounded-bl-md rounded-br-xl ${settings.backgroundImage ? '' : 'bg-white shadow-sm'}`}>
                 <div className="flex gap-1.5">
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  <span className={`w-2 h-2 rounded-full animate-bounce ${settings.backgroundImage ? 'bg-white' : 'bg-gray-400'}`} style={{ animationDelay: '0ms' }} />
+                  <span className={`w-2 h-2 rounded-full animate-bounce ${settings.backgroundImage ? 'bg-white' : 'bg-gray-400'}`} style={{ animationDelay: '150ms' }} />
+                  <span className={`w-2 h-2 rounded-full animate-bounce ${settings.backgroundImage ? 'bg-white' : 'bg-gray-400'}`} style={{ animationDelay: '300ms' }} />
                 </div>
               </div>
-              <div className="absolute top-3 left-[-4px] w-2 h-2 bg-white" style={{ clipPath: 'polygon(100% 50%, 0 0, 0 100%)' }} />
+              {!settings.backgroundImage && (
+                <div className="absolute top-3 left-[-4px] w-2 h-2 bg-white" style={{ clipPath: 'polygon(100% 50%, 0 0, 0 100%)' }} />
+              )}
             </div>
           </div>
         )}

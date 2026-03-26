@@ -56,7 +56,9 @@ export function MeetingRoom({ characters, onClose }: MeetingRoomProps) {
         apiModel: parsed.apiModel || 'gpt-3.5-turbo',
       });
     }
-  }, []);
+    // 调试：检查 characters
+    console.log('MeetingRoom characters:', characters);
+  }, [characters]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -400,25 +402,32 @@ ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">选择参与者</label>
                 <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-2">
-                  {characters.map(character => (
-                    <div key={character.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
-                      <input
-                        type="checkbox"
-                        checked={selectedParticipants.includes(character.id)}
-                        onChange={() => toggleParticipant(character.id)}
-                        className="w-4 h-4 text-[#07C160] rounded"
-                      />
-                      <img
-                        src={character.avatar}
-                        alt={character.name}
-                        className="w-8 h-8 rounded-lg object-cover"
-                      />
-                      <div className="flex-1">
-                        <div className="font-medium text-sm">{character.name}</div>
-                        <div className="text-xs text-gray-500">{character.title}</div>
-                      </div>
+                  {characters.length === 0 ? (
+                    <div className="text-center text-gray-500 py-4 text-sm">
+                      暂无角色，请先创建角色
                     </div>
-                  ))}
+                  ) : (
+                    characters.map(character => (
+                      <div key={character.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer" onClick={() => toggleParticipant(character.id)}>
+                        <input
+                          type="checkbox"
+                          checked={selectedParticipants.includes(character.id)}
+                          onChange={() => toggleParticipant(character.id)}
+                          className="w-4 h-4 text-[#07C160] rounded cursor-pointer"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <img
+                          src={character.avatar}
+                          alt={character.name}
+                          className="w-8 h-8 rounded-lg object-cover"
+                        />
+                        <div className="flex-1">
+                          <div className="font-medium text-sm">{character.name}</div>
+                          <div className="text-xs text-gray-500">{character.title}</div>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 

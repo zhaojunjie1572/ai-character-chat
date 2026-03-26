@@ -65,6 +65,7 @@ export function MeetingRoom({ characters, onClose }: MeetingRoomProps) {
   // 辩论模式状态
   const [debateMode, setDebateMode] = useState(false);
   const [debateTarget, setDebateTarget] = useState<{ messageId: string; characterId: string; content: string } | null>(null);
+  const [selectedDebaters, setSelectedDebaters] = useState<string[]>([]); // 选中的询问对象
   
   // 显示添加参与者面板
   const [showAddParticipant, setShowAddParticipant] = useState(false);
@@ -372,11 +373,15 @@ ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
     setIsProcessing(false);
   };
 
-  // 辩论模式：询问其他角色对某条消息的看法
+  // 辩论模式：询问选中的角色对某条消息的看法
   const handleDebateMessage = async (content: string, target: { messageId: string; characterId: string; content: string }) => {
     if (!currentMeeting || !content.trim() || isProcessing) return;
     if (!settings.apiKey) {
       setError('请先设置API密钥');
+      return;
+    }
+    if (selectedDebaters.length === 0) {
+      setError('请至少选择一个询问对象');
       return;
     }
 
@@ -405,12 +410,12 @@ ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
     const targetParticipant = currentMeeting.participants.find(p => p.characterId === target.characterId);
     const targetName = targetParticipant?.character.name || '该参与者';
 
-    // 让其他参与者（不包括被评论者）依次回复
+    // 只让选中的参与者回复
     apiService.setConfig(settings.apiKey, settings.apiBaseURL, settings.apiModel);
 
     for (const participant of currentMeeting.participants) {
-      // 跳过被评论者和非活跃参与者
-      if (participant.characterId === target.characterId || !participant.isActive) continue;
+      // 只处理选中的参与者
+      if (!selectedDebaters.includes(participant.characterId) || !participant.isActive) continue;
 
       try {
         // 构建上下文
@@ -491,6 +496,7 @@ ${contextMessages}`;
     // 退出辩论模式
     setDebateMode(false);
     setDebateTarget(null);
+    setSelectedDebaters([]);
 
     setIsProcessing(false);
   };
@@ -1026,6 +1032,11 @@ ${contextMessages}`;
                                   characterId: message.characterId,
                                   content: message.content,
                                 });
+                                // 默认选中除被评论者外的所有角色
+                                const otherParticipants = currentMeeting.participants
+                                  .filter(p => p.characterId !== message.characterId)
+                                  .map(p => p.characterId);
+                                setSelectedDebaters(otherParticipants);
                                 setDebateMode(true);
                               }}
                               className="p-1 rounded-full hover:bg-purple-100 text-gray-400 hover:text-purple-600 transition-colors"
@@ -1054,6 +1065,7 @@ ${contextMessages}`;
                       onClick={() => {
                         setDebateMode(false);
                         setDebateTarget(null);
+                        setSelectedDebaters([]);
                       }}
                       className="text-xs text-purple-500 hover:text-purple-700"
                     >
@@ -1063,7 +1075,39 @@ ${contextMessages}`;
                   <p className="text-xs text-purple-600 mb-1">
                     询问其他角色对 <strong>{currentMeeting.participants.find(p => p.characterId === debateTarget.characterId)?.character.name}</strong> 的看法：
                   </p>
-                  <p className="text-xs text-gray-500 truncate">{debateTarget.content.slice(0, 50)}...</p>
+                  <p className="text-xs text-gray-500 truncate mb-3">{debateTarget.content.slice(0, 50)}...</p>
+                  
+                  {/* 选择询问对象 */}
+                  <div className="border-t border-purple-200 pt-2">
+                    <p className="text-xs text-purple-600 mb-2">选择询问对象：</p>
+                    <div className="flex flex-wrap gap-2">
+                      {currentMeeting.participants
+                        .filter(p => p.characterId !== debateTarget.characterId)
+                        .map(p => {
+                          const isSelected = selectedDebaters.includes(p.characterId);
+                          return (
+                            <button
+                              key={p.characterId}
+                              onClick={() => {
+                                setSelectedDebaters(prev => 
+                                  isSelected 
+                                    ? prev.filter(id => id !== p.characterId)
+                                    : [...prev, p.characterId]
+                                );
+                              }}
+                              className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs transition-colors ${
+                                isSelected
+                                  ? 'bg-purple-500 text-white'
+                                  : 'bg-white border border-purple-300 text-purple-600 hover:bg-purple-100'
+                              }`}
+                            >
+                              <img src={p.character.avatar} alt="" className="w-4 h-4 rounded-full" />
+                              {p.character.name}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
                 </div>
               )}
               

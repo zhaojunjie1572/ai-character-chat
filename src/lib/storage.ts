@@ -267,6 +267,42 @@ export const storage = {
     safeStorage.removeItem(`${CURRENT_SESSION_KEY}_${characterId}`);
   },
 
+  // 获取所有历史记录（用于同步）
+  getAllCharacterHistories: (): Record<string, ChatHistory[]> => {
+    const histories: Record<string, ChatHistory[]> = {};
+    if (typeof window === 'undefined') return histories;
+
+    // 遍历 localStorage 中所有以 ai_chat_histories_ 开头的 key
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(`${CHAT_HISTORIES_KEY}_`)) {
+        try {
+          const data = localStorage.getItem(key);
+          if (data) {
+            const characterId = key.replace(`${CHAT_HISTORIES_KEY}_`, '');
+            const parsed: ChatHistory[] = JSON.parse(data);
+            if (parsed && parsed.length > 0) {
+              histories[characterId] = parsed;
+            }
+          }
+        } catch (e) {
+          console.error('解析历史记录失败:', key, e);
+        }
+      }
+    }
+
+    return histories;
+  },
+
+  // 保存角色的所有历史记录（用于恢复同步）
+  saveAllCharacterHistories: (histories: Record<string, ChatHistory[]>): void => {
+    Object.entries(histories).forEach(([characterId, characterHistories]) => {
+      if (characterHistories && characterHistories.length > 0) {
+        safeStorage.setItem(`${CHAT_HISTORIES_KEY}_${characterId}`, JSON.stringify(characterHistories));
+      }
+    });
+  },
+
   // ========== 角色分组 ==========
 
   // 获取所有分组

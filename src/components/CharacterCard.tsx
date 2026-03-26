@@ -2,6 +2,7 @@
 
 import { Character } from '@/types/character';
 import { Edit2, Trash2, MessageCircle } from 'lucide-react';
+import { Avatar } from './Avatar';
 
 interface CharacterCardProps {
   character: Character;
@@ -17,10 +18,13 @@ export function CharacterCard({ character, onEdit, onDelete, onChat }: Character
         <div className="flex items-start gap-4">
           {/* 头像 */}
           <div className="relative">
-            <img
+            <Avatar
               src={character.avatar}
-              alt={character.name}
-              className="w-20 h-20 rounded-full object-cover border-2 border-gray-100"
+              name={character.name}
+              size="lg"
+              borderColor="ring-gray-100"
+              showStatus
+              status="online"
             />
             <button
               onClick={onChat}

@@ -12,6 +12,7 @@ import { useCharacters } from '@/hooks/useCharacters';
 import { CharacterForm } from '@/components/CharacterForm';
 import { ChatInterface } from '@/components/ChatInterface';
 import { MeetingRoom } from '@/components/MeetingRoom';
+import { Avatar } from '@/components/Avatar';
 import { Character, CharacterGroup } from '@/types/character';
 import { gistSyncService } from '@/lib/gistSync';
 import { storage } from '@/lib/storage';
@@ -523,10 +524,11 @@ export default function Home() {
                     onClick={() => setChattingCharacter(character)}
                     className="flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200 active:bg-gray-100 cursor-pointer"
                   >
-                    <img
+                    <Avatar
                       src={character.avatar}
-                      alt={character.name}
-                      className="w-11 h-11 rounded-lg object-cover shrink-0"
+                      name={character.name}
+                      size="md"
+                      borderColor="ring-2 ring-gray-100"
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-0.5">
@@ -620,10 +622,11 @@ export default function Home() {
                       {/* 分组下的角色 */}
                       {isExpanded && groupCharacters.map(character => (
                         <div key={character.id} className="flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200 pl-8">
-                          <img
+                          <Avatar
                             src={character.avatar}
-                            alt={character.name}
-                            className="w-11 h-11 rounded-lg object-cover shrink-0"
+                            name={character.name}
+                            size="md"
+                            borderColor="ring-2 ring-gray-100"
                           />
                           <div 
                             onClick={() => setChattingCharacter(character)}
@@ -732,10 +735,11 @@ export default function Home() {
                     </div>
                     {filteredCharacters.filter(c => !c.group).map(character => (
                       <div key={character.id} className="flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200">
-                        <img
+                        <Avatar
                           src={character.avatar}
-                          alt={character.name}
-                          className="w-11 h-11 rounded-lg object-cover shrink-0"
+                          name={character.name}
+                          size="md"
+                          borderColor="ring-2 ring-gray-100"
                         />
                         <div 
                           onClick={() => setChattingCharacter(character)}
@@ -1385,10 +1389,10 @@ export default function Home() {
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {characters.map(character => (
                   <div key={character.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
-                    <img
+                    <Avatar
                       src={character.avatar}
-                      alt={character.name}
-                      className="w-8 h-8 rounded-lg object-cover"
+                      name={character.name}
+                      size="sm"
                     />
                     <span className="flex-1 text-sm">{character.name}</span>
                     <select

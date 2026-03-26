@@ -5,6 +5,7 @@ import { Character } from '@/types/character';
 import { X, Upload, User, Sparkles, Loader2, Wand2, Camera } from 'lucide-react';
 import { generateCharacter, getAvatarForCharacter, GeneratedCharacter } from '@/lib/characterGenerator';
 import { AvatarMaker } from './AvatarMaker';
+import { AVATAR_STYLES, generateAvatarsForStyle } from '@/lib/avatarLibrary';
 
 interface CharacterFormProps {
   character?: Character;
@@ -16,17 +17,6 @@ interface CharacterFormProps {
     apiModel: string;
   };
 }
-
-const PRESET_AVATARS = [
-  'https://api.dicebear.com/7.x/avataaars/svg?seed=zhuge',
-  'https://api.dicebear.com/7.x/avataaars/svg?seed=caocao',
-  'https://api.dicebear.com/7.x/avataaars/svg?seed=guanyu',
-  'https://api.dicebear.com/7.x/avataaars/svg?seed=zhangfei',
-  'https://api.dicebear.com/7.x/avataaars/svg?seed=zhaoyun',
-  'https://api.dicebear.com/7.x/avataaars/svg?seed=zhouyu',
-  'https://api.dicebear.com/7.x/avataaars/svg?seed=sunquan',
-  'https://api.dicebear.com/7.x/avataaars/svg?seed=liubei',
-];
 
 const ZHUGE_LIANG_TEMPLATE = `【核心指令】
 你现在完全成为【诸葛亮】，继承以下所有基础档案、性格内核、情感波动、智谋体系、知识记忆、语言风格、行为逻辑。
@@ -62,14 +52,18 @@ export function CharacterForm({ character, onSave, onCancel, apiSettings }: Char
   const [title, setTitle] = useState(character?.title || '');
   const [description, setDescription] = useState(character?.description || '');
   const [systemPrompt, setSystemPrompt] = useState(character?.systemPrompt || '');
-  const [avatar, setAvatar] = useState(character?.avatar || PRESET_AVATARS[0]);
+  const [avatar, setAvatar] = useState(character?.avatar || generateAvatarsForStyle('avataaars', 1)[0]);
   const [customAvatar, setCustomAvatar] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
   const [showAIGenerator, setShowAIGenerator] = useState(false);
   const [aiNameInput, setAiNameInput] = useState('');
   const [showAvatarMaker, setShowAvatarMaker] = useState(false);
+  const [selectedStyle, setSelectedStyle] = useState('avataaars');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 获取当前风格的头像列表
+  const currentStyleAvatars = generateAvatarsForStyle(selectedStyle, 12);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -239,39 +233,70 @@ export function CharacterForm({ character, onSave, onCancel, apiSettings }: Char
             <label className="block text-sm font-medium text-gray-700 mb-3">
               角色头像
             </label>
-            <div className="flex flex-wrap gap-3 mb-3">
-              {PRESET_AVATARS.map((url, index) => (
+
+            {/* 风格选择 */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              {AVATAR_STYLES.map((style) => (
                 <button
-                  key={index}
+                  key={style.id}
                   type="button"
-                  onClick={() => setAvatar(url)}
-                  className={`w-16 h-16 rounded-full overflow-hidden border-2 transition-all ${
-                    avatar === url ? 'border-primary-500 ring-2 ring-primary-200' : 'border-gray-200 hover:border-gray-300'
+                  onClick={() => setSelectedStyle(style.id)}
+                  className={`px-3 py-1.5 rounded-full text-sm transition-all flex items-center gap-1.5 ${
+                    selectedStyle === style.id
+                      ? 'bg-primary-100 text-primary-700 ring-2 ring-primary-300'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
-                  <img src={url} alt={`预设头像 ${index + 1}`} className="w-full h-full object-cover" />
+                  <span>{style.icon}</span>
+                  {style.name}
                 </button>
               ))}
+            </div>
+
+            {/* 头像网格 */}
+            <div className="grid grid-cols-6 gap-3 mb-4 max-h-48 overflow-y-auto p-2 bg-gray-50 rounded-lg">
+              {currentStyleAvatars.map((url, index) => (
+                <button
+                  key={`${selectedStyle}-${index}`}
+                  type="button"
+                  onClick={() => setAvatar(url)}
+                  className={`w-14 h-14 rounded-full overflow-hidden border-2 transition-all hover:scale-105 ${
+                    avatar === url ? 'border-primary-500 ring-2 ring-primary-200 shadow-md' : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <img src={url} alt={`头像 ${index + 1}`} className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+
+            {/* 自定义头像选项 */}
+            <div className="flex gap-3">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className={`w-16 h-16 rounded-full border-2 border-dashed flex items-center justify-center transition-all ${
-                  customAvatar ? 'border-primary-500 bg-primary-50' : 'border-gray-300 hover:border-gray-400'
+                className={`flex-1 py-2 px-4 rounded-lg border-2 border-dashed flex items-center justify-center gap-2 transition-all ${
+                  customAvatar ? 'border-primary-500 bg-primary-50' : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
                 }`}
               >
                 {customAvatar ? (
-                  <img src={customAvatar} alt="自定义头像" className="w-full h-full object-cover rounded-full" />
+                  <>
+                    <img src={customAvatar} alt="自定义头像" className="w-8 h-8 object-cover rounded-full" />
+                    <span className="text-sm text-gray-600">更换图片</span>
+                  </>
                 ) : (
-                  <Upload className="w-6 h-6 text-gray-400" />
+                  <>
+                    <Upload className="w-5 h-5 text-gray-400" />
+                    <span className="text-sm text-gray-600">上传图片</span>
+                  </>
                 )}
               </button>
               <button
                 type="button"
                 onClick={() => setShowAvatarMaker(true)}
-                className="w-16 h-16 rounded-full border-2 border-dashed border-purple-300 hover:border-purple-400 flex items-center justify-center transition-all bg-purple-50"
-                title="制作头像"
+                className="flex-1 py-2 px-4 rounded-lg border-2 border-dashed border-purple-300 hover:border-purple-400 flex items-center justify-center gap-2 transition-all bg-purple-50 hover:bg-purple-100"
               >
-                <Camera className="w-6 h-6 text-purple-500" />
+                <Camera className="w-5 h-5 text-purple-500" />
+                <span className="text-sm text-purple-600">制作头像</span>
               </button>
               <input
                 ref={fileInputRef}
@@ -281,9 +306,6 @@ export function CharacterForm({ character, onSave, onCancel, apiSettings }: Char
                 className="hidden"
               />
             </div>
-            <p className="text-xs text-gray-500">
-              点击相机图标可以上传图片并裁剪制作头像，支持缩放、旋转和拖动调整
-            </p>
           </div>
 
           {/* 头像制作弹窗 */}

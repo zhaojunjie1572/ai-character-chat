@@ -722,9 +722,38 @@ ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
               {currentMeeting.topic && (
                 <p className="text-sm text-gray-500 mt-0.5">{currentMeeting.topic}</p>
               )}
-              <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
-                <span>第 {currentMeeting.currentRound}/{currentMeeting.maxRounds} 轮</span>
-                <span>{currentMeeting.contextMode === 'discussion' ? '讨论模式' : '独立回复'}</span>
+              <div className="flex items-center gap-4 mt-2 text-xs">
+                <span className="text-gray-400">第 {currentMeeting.currentRound}/{currentMeeting.maxRounds} 轮</span>
+                
+                {/* 模式切换按钮 */}
+                <button
+                  onClick={() => {
+                    const newMode: 'independent' | 'discussion' = currentMeeting.contextMode === 'discussion' ? 'independent' : 'discussion';
+                    const updatedMeeting = { ...currentMeeting, contextMode: newMode, updatedAt: Date.now() };
+                    setCurrentMeeting(updatedMeeting);
+                    // 更新存储
+                    meetingStorage.updateMeeting(updatedMeeting);
+                  }}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-full transition-colors ${
+                    currentMeeting.contextMode === 'discussion'
+                      ? 'bg-purple-100 text-purple-600 hover:bg-purple-200'
+                      : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                  }`}
+                  title="点击切换模式"
+                >
+                  {currentMeeting.contextMode === 'discussion' ? (
+                    <>
+                      <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                      讨论模式
+                    </>
+                  ) : (
+                    <>
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                      独立回复
+                    </>
+                  )}
+                </button>
+                
                 {settings.voiceEnabled && (
                   <span className="flex items-center gap-1 text-[#07C160]">
                     <Volume2 className="w-3 h-3" />

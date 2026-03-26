@@ -15,6 +15,8 @@
   
   body {
     @apply text-gray-900 bg-gray-50;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
 }
 
@@ -25,26 +27,39 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+  
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
+
+/* 手机端优化 */
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 /* 自定义滚动条 */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a1a1a1;
+  background: rgba(0, 0, 0, 0.3);
 }
 
 /* 动画 */
@@ -61,4 +76,28 @@
 
 .animate-fade-in {
   animation: fadeIn 0.3s ease-out;
+}
+
+/* 禁止文字选择 */
+.no-select {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* 长按高亮 */
+.highlight-active:active {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* 输入框优化 */
+textarea, input {
+  -webkit-appearance: none;
+  border-radius: 0;
+}
+
+/* 防止双击缩放 */
+* {
+  touch-action: manipulation;
 }

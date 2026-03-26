@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AI角色对话 - 创建你的专属AI伙伴",
-  description: "创建、定制AI角色，与他们进行智能对话",
+  title: "三达通 - 微信通三界",
+  description: "想和谁聊，就捏一个谁",
 };
 
 export default function RootLayout({

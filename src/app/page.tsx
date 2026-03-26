@@ -176,7 +176,7 @@ export default function Home() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `ai-character-chat-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `san-da-tong-backup-${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

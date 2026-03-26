@@ -12,7 +12,7 @@ export interface SyncData {
   lastSync: number;
 }
 
-const GIST_FILENAME = 'ai-character-chat-data.json';
+const GIST_FILENAME = 'san-da-tong-data.json';
 const DATA_VERSION = '1.0';
 
 export class GistSyncService {
@@ -35,7 +35,7 @@ export class GistSyncService {
           'Accept': 'application/vnd.github.v3+json',
         },
         body: JSON.stringify({
-          description: 'AI Character Chat - 角色和配置同步数据',
+          description: '三达通 - 角色和配置同步数据',
           public: false,
           files: {
             [GIST_FILENAME]: {
@@ -74,7 +74,7 @@ export class GistSyncService {
           'Accept': 'application/vnd.github.v3+json',
         },
         body: JSON.stringify({
-          description: 'AI Character Chat - 角色和配置同步数据',
+          description: '三达通 - 角色和配置同步数据',
           files: {
             [GIST_FILENAME]: {
               content: JSON.stringify(data, null, 2),

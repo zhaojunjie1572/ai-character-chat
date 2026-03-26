@@ -140,8 +140,8 @@ export default function Home() {
         setSyncMessage('同步成功！');
         setTimeout(() => setSyncMessage(''), 3000);
       }
-    } catch (error) {
-      setSyncError('同步失败');
+    } catch (error: any) {
+      setSyncError(error.message || '同步失败');
     } finally {
       setIsSyncing(false);
     }
@@ -206,8 +206,8 @@ export default function Home() {
           setTimeout(() => setSyncMessage(''), 3000);
         }
       }
-    } catch (error) {
-      setSyncError('恢复失败');
+    } catch (error: any) {
+      setSyncError(error.message || '恢复失败');
     } finally {
       setIsSyncing(false);
     }
@@ -238,14 +238,16 @@ export default function Home() {
       const content = event.target?.result as string;
       const data = gistSyncService.importData(content);
 
-      if (data && (data.characters || data.chatSessions)) {
+      if (data && (data.characters || data.chatSessions || data.settings)) {
         const hasCharacters = data.characters && data.characters.length > 0;
         const hasChatSessions = data.chatSessions && Object.keys(data.chatSessions).length > 0;
+        const hasSettings = data.settings && Object.keys(data.settings).length > 0;
         
         let message = '找到数据，是否导入？';
         const parts: string[] = [];
         if (hasCharacters) parts.push(`${data.characters.length} 个角色`);
         if (hasChatSessions) parts.push('聊天记录');
+        if (hasSettings) parts.push('设置');
         if (parts.length > 0) {
           message = `找到 ${parts.join('、')}，是否导入？`;
         }
@@ -269,9 +271,19 @@ export default function Home() {
             });
           }
 
+          if (hasSettings) {
+            const restoredSettings = { ...DEFAULT_SETTINGS, ...data.settings };
+            setApiSettings(restoredSettings);
+            setTempSettings(restoredSettings);
+            localStorage.setItem('ai_app_settings', JSON.stringify(restoredSettings));
+          }
+
           setSyncMessage('导入成功！');
           setTimeout(() => setSyncMessage(''), 3000);
         }
+      } else {
+        setSyncError('导入的文件格式不正确');
+        setTimeout(() => setSyncError(''), 3000);
       }
     };
     reader.readAsText(file);

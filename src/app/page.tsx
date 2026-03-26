@@ -97,6 +97,17 @@ export default function Home() {
     setTimeout(() => setSaveSuccess(false), 2000);
   };
 
+  const getAllChatSessions = () => {
+    const sessions: Record<string, any> = {};
+    characters.forEach(c => {
+      const session = storage.getChatSession(c.id);
+      if (session.messages.length > 0) {
+        sessions[c.id] = session;
+      }
+    });
+    return sessions;
+  };
+
   const handleSyncToGist = async () => {
     if (!apiSettings.gistToken) {
       setSyncError('请先配置 GitHub Token');
@@ -109,7 +120,8 @@ export default function Home() {
 
     try {
       gistSyncService.setConfig(apiSettings.gistToken, apiSettings.gistId);
-      const data = gistSyncService.prepareSyncData(characters, apiSettings);
+      const chatSessions = getAllChatSessions();
+      const data = gistSyncService.prepareSyncData(characters, chatSessions, apiSettings);
       
       let gistId: string | null = apiSettings.gistId;
       if (!gistId) {
@@ -149,17 +161,18 @@ export default function Home() {
       gistSyncService.setConfig(apiSettings.gistToken, apiSettings.gistId);
       const data = await gistSyncService.fetchGist();
 
-      if (data && (data.characters || data.settings)) {
+      if (data && (data.characters || data.settings || data.chatSessions)) {
         const hasCharacters = data.characters && data.characters.length > 0;
         const hasSettings = data.settings && Object.keys(data.settings).length > 0;
+        const hasChatSessions = data.chatSessions && Object.keys(data.chatSessions).length > 0;
         
         let message = '找到数据，是否恢复？';
-        if (hasCharacters && hasSettings) {
-          message = `找到 ${data.characters.length} 个角色和设置，是否恢复？`;
-        } else if (hasCharacters) {
-          message = `找到 ${data.characters.length} 个角色，是否恢复？`;
-        } else if (hasSettings) {
-          message = '找到设置，是否恢复？';
+        const parts: string[] = [];
+        if (hasCharacters) parts.push(`${data.characters.length} 个角色`);
+        if (hasChatSessions) parts.push('聊天记录');
+        if (hasSettings) parts.push('设置');
+        if (parts.length > 0) {
+          message = `找到 ${parts.join('、')}，是否恢复？`;
         }
 
         if (confirm(message)) {
@@ -173,6 +186,12 @@ export default function Home() {
                 avatar: c.avatar,
                 systemPrompt: c.systemPrompt,
               });
+            });
+          }
+
+          if (hasChatSessions && data.chatSessions) {
+            Object.values(data.chatSessions).forEach((session: any) => {
+              storage.saveChatSession(session);
             });
           }
 
@@ -195,7 +214,8 @@ export default function Home() {
   };
 
   const handleExport = () => {
-    const data = gistSyncService.exportFullData(characters, apiSettings);
+    const chatSessions = getAllChatSessions();
+    const data = gistSyncService.exportFullData(characters, chatSessions, apiSettings);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -218,17 +238,37 @@ export default function Home() {
       const content = event.target?.result as string;
       const data = gistSyncService.importData(content);
 
-      if (data && data.characters) {
-        if (confirm(`找到 ${data.characters.length} 个角色，是否导入？`)) {
-          data.characters.forEach((c: Character) => {
-            addCharacter({
-              name: c.name,
-              title: c.title,
-              description: c.description,
-              avatar: c.avatar,
-              systemPrompt: c.systemPrompt,
+      if (data && (data.characters || data.chatSessions)) {
+        const hasCharacters = data.characters && data.characters.length > 0;
+        const hasChatSessions = data.chatSessions && Object.keys(data.chatSessions).length > 0;
+        
+        let message = '找到数据，是否导入？';
+        const parts: string[] = [];
+        if (hasCharacters) parts.push(`${data.characters.length} 个角色`);
+        if (hasChatSessions) parts.push('聊天记录');
+        if (parts.length > 0) {
+          message = `找到 ${parts.join('、')}，是否导入？`;
+        }
+
+        if (confirm(message)) {
+          if (hasCharacters) {
+            data.characters.forEach((c: Character) => {
+              addCharacter({
+                name: c.name,
+                title: c.title,
+                description: c.description,
+                avatar: c.avatar,
+                systemPrompt: c.systemPrompt,
+              });
             });
-          });
+          }
+
+          if (hasChatSessions && data.chatSessions) {
+            Object.values(data.chatSessions).forEach((session: any) => {
+              storage.saveChatSession(session);
+            });
+          }
+
           setSyncMessage('导入成功！');
           setTimeout(() => setSyncMessage(''), 3000);
         }

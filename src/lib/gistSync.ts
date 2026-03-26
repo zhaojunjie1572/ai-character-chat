@@ -1,4 +1,4 @@
-import { Character } from '@/types/character';
+import { Character, ChatSession } from '@/types/character';
 
 export interface GistConfig {
   token: string;
@@ -7,13 +7,14 @@ export interface GistConfig {
 
 export interface SyncData {
   characters: Character[];
+  chatSessions: Record<string, ChatSession>;
   settings: Record<string, any>;
   version: string;
   lastSync: number;
 }
 
 const GIST_FILENAME = 'san-da-tong-data.json';
-const DATA_VERSION = '1.0';
+const DATA_VERSION = '2.0';
 
 export class GistSyncService {
   private token: string = '';
@@ -24,7 +25,6 @@ export class GistSyncService {
     this.gistId = gistId;
   }
 
-  // 创建新的 Gist
   async createGist(data: SyncData): Promise<string | null> {
     try {
       const response = await fetch('https://api.github.com/gists', {
@@ -58,7 +58,6 @@ export class GistSyncService {
     }
   }
 
-  // 更新现有 Gist
   async updateGist(data: SyncData): Promise<boolean> {
     if (!this.gistId) {
       console.error('没有 Gist ID');
@@ -95,7 +94,6 @@ export class GistSyncService {
     }
   }
 
-  // 从 Gist 获取数据
   async fetchGist(): Promise<SyncData | null> {
     if (!this.gistId) {
       console.error('没有 Gist ID');
@@ -130,7 +128,6 @@ export class GistSyncService {
     }
   }
 
-  // 获取用户的所有 Gists
   async listGists(): Promise<Array<{ id: string; description: string; updated_at: string }>> {
     try {
       const response = await fetch('https://api.github.com/gists', {
@@ -157,13 +154,16 @@ export class GistSyncService {
     }
   }
 
-  // 准备同步数据
-  prepareSyncData(characters: Character[], settings: Record<string, any>): SyncData {
+  prepareSyncData(
+    characters: Character[],
+    chatSessions: Record<string, ChatSession>,
+    settings: Record<string, any>
+  ): SyncData {
     return {
       characters,
+      chatSessions,
       settings: {
         ...settings,
-        // 不同步敏感信息
         apiKey: settings.apiKey ? '***encrypted***' : '',
         gistToken: settings.gistToken ? '***encrypted***' : '',
       },
@@ -172,10 +172,14 @@ export class GistSyncService {
     };
   }
 
-  // 导出完整数据（包含敏感信息）
-  exportFullData(characters: Character[], settings: Record<string, any>): string {
+  exportFullData(
+    characters: Character[],
+    chatSessions: Record<string, ChatSession>,
+    settings: Record<string, any>
+  ): string {
     const data: SyncData = {
       characters,
+      chatSessions,
       settings,
       version: DATA_VERSION,
       lastSync: Date.now(),
@@ -183,7 +187,6 @@ export class GistSyncService {
     return JSON.stringify(data, null, 2);
   }
 
-  // 导入数据
   importData(jsonString: string): SyncData | null {
     try {
       const data = JSON.parse(jsonString);

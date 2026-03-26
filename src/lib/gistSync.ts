@@ -1,4 +1,4 @@
-import { Character, ChatSession } from '@/types/character';
+import { Character, ChatSession, CharacterGroup } from '@/types/character';
 
 export interface GistConfig {
   token: string;
@@ -8,6 +8,7 @@ export interface GistConfig {
 export interface SyncData {
   characters: Character[];
   chatSessions: Record<string, ChatSession>;
+  characterGroups: CharacterGroup[];
   settings: Record<string, any>;
   version: string;
   lastSync: number;
@@ -180,11 +181,13 @@ export class GistSyncService {
   prepareSyncData(
     characters: Character[],
     chatSessions: Record<string, ChatSession>,
+    characterGroups: CharacterGroup[],
     settings: Record<string, any>
   ): SyncData {
     return {
       characters,
       chatSessions,
+      characterGroups,
       settings: {
         ...settings,
         apiKey: settings.apiKey ? '***encrypted***' : '',
@@ -198,11 +201,13 @@ export class GistSyncService {
   exportFullData(
     characters: Character[],
     chatSessions: Record<string, ChatSession>,
+    characterGroups: CharacterGroup[],
     settings: Record<string, any>
   ): string {
     const data: SyncData = {
       characters,
       chatSessions,
+      characterGroups,
       settings,
       version: DATA_VERSION,
       lastSync: Date.now(),

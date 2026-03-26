@@ -117,7 +117,7 @@ export default function Home() {
   const handleSyncToGist = async () => {
     // 使用 tempSettings 中的值，这样用户修改后可以立即同步
     const currentSettings = { ...apiSettings, ...tempSettings };
-    
+
     if (!currentSettings.gistToken) {
       setSyncError('请先配置 GitHub Token');
       return;
@@ -130,8 +130,9 @@ export default function Home() {
     try {
       gistSyncService.setConfig(currentSettings.gistToken, currentSettings.gistId);
       const chatSessions = getAllChatSessions();
-      const data = gistSyncService.prepareSyncData(characters, chatSessions, currentSettings);
-      
+      const characterGroups = storage.getCharacterGroups();
+      const data = gistSyncService.prepareSyncData(characters, chatSessions, characterGroups, currentSettings);
+
       let gistId: string | null = currentSettings.gistId;
       if (!gistId) {
         gistId = await gistSyncService.createGist(data);
@@ -197,7 +198,15 @@ export default function Home() {
                 description: c.description,
                 avatar: c.avatar,
                 systemPrompt: c.systemPrompt,
+                group: c.group,
               });
+            });
+          }
+
+          // 恢复分组数据
+          if (data.characterGroups && data.characterGroups.length > 0) {
+            data.characterGroups.forEach((g: CharacterGroup) => {
+              storage.saveCharacterGroup(g);
             });
           }
 
@@ -216,6 +225,8 @@ export default function Home() {
 
           setSyncMessage('恢复成功！');
           setTimeout(() => setSyncMessage(''), 3000);
+          // 刷新页面以加载分组数据
+          window.location.reload();
         }
       }
     } catch (error: any) {
@@ -227,7 +238,8 @@ export default function Home() {
 
   const handleExport = () => {
     const chatSessions = getAllChatSessions();
-    const data = gistSyncService.exportFullData(characters, chatSessions, apiSettings);
+    const characterGroups = storage.getCharacterGroups();
+    const data = gistSyncService.exportFullData(characters, chatSessions, characterGroups, apiSettings);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -250,14 +262,16 @@ export default function Home() {
       const content = event.target?.result as string;
       const data = gistSyncService.importData(content);
 
-      if (data && (data.characters || data.chatSessions || data.settings)) {
+      if (data && (data.characters || data.chatSessions || data.settings || data.characterGroups)) {
         const hasCharacters = data.characters && data.characters.length > 0;
         const hasChatSessions = data.chatSessions && Object.keys(data.chatSessions).length > 0;
         const hasSettings = data.settings && Object.keys(data.settings).length > 0;
-        
+        const hasGroups = data.characterGroups && data.characterGroups.length > 0;
+
         let message = '找到数据，是否导入？';
         const parts: string[] = [];
         if (hasCharacters) parts.push(`${data.characters.length} 个角色`);
+        if (hasGroups) parts.push(`${data.characterGroups.length} 个分组`);
         if (hasChatSessions) parts.push('聊天记录');
         if (hasSettings) parts.push('设置');
         if (parts.length > 0) {
@@ -265,6 +279,13 @@ export default function Home() {
         }
 
         if (confirm(message)) {
+          // 先恢复分组
+          if (hasGroups) {
+            data.characterGroups.forEach((g: CharacterGroup) => {
+              storage.saveCharacterGroup(g);
+            });
+          }
+
           if (hasCharacters) {
             data.characters.forEach((c: Character) => {
               addCharacter({
@@ -273,6 +294,7 @@ export default function Home() {
                 description: c.description,
                 avatar: c.avatar,
                 systemPrompt: c.systemPrompt,
+                group: c.group,
               });
             });
           }
@@ -292,6 +314,7 @@ export default function Home() {
 
           setSyncMessage('导入成功！');
           setTimeout(() => setSyncMessage(''), 3000);
+          window.location.reload();
         }
       } else {
         setSyncError('导入的文件格式不正确');

@@ -164,7 +164,8 @@ export default function Home() {
       const characterHistories = getAllCharacterHistories();
       const characterGroups = storage.getCharacterGroups();
       const meetings = meetingStorage.getMeetings();
-      const data = gistSyncService.prepareSyncData(characters, chatSessions, characterHistories, characterGroups, meetings, currentSettings);
+      const memos = memoStorage.getMemos();
+      const data = gistSyncService.prepareSyncData(characters, chatSessions, characterHistories, characterGroups, meetings, memos, currentSettings);
 
       let gistId: string | null = currentSettings.gistId;
       if (!gistId) {
@@ -207,17 +208,19 @@ export default function Home() {
       gistSyncService.setConfig(currentSettings.gistToken, currentSettings.gistId);
       const data = await gistSyncService.fetchGist();
 
-      if (data && (data.characters || data.settings || data.chatSessions || data.characterHistories || data.meetings)) {
+      if (data && (data.characters || data.settings || data.chatSessions || data.characterHistories || data.meetings || data.memos)) {
         const hasCharacters = data.characters && data.characters.length > 0;
         const hasSettings = data.settings && Object.keys(data.settings).length > 0;
         const hasChatSessions = data.chatSessions && Object.keys(data.chatSessions).length > 0;
         const hasHistories = data.characterHistories && Object.keys(data.characterHistories).length > 0;
         const hasMeetings = data.meetings && data.meetings.length > 0;
+        const hasMemos = data.memos && data.memos.length > 0;
 
         let message = '找到数据，是否恢复？';
         const parts: string[] = [];
         if (hasCharacters) parts.push(`${data.characters.length} 个角色`);
         if (hasMeetings) parts.push(`${data.meetings.length} 个会议`);
+        if (hasMemos) parts.push(`${data.memos.length} 条备忘录`);
         if (hasHistories) parts.push('历史记录');
         if (hasChatSessions) parts.push('当前会话');
         if (hasSettings) parts.push('设置');
@@ -259,6 +262,11 @@ export default function Home() {
             meetingStorage.saveMeetings(data.meetings);
           }
 
+          // 恢复备忘录
+          if (hasMemos && data.memos) {
+            memoStorage.saveMemos(data.memos);
+          }
+
           if (hasSettings) {
             // 保留本地的敏感信息（Token 等），只恢复其他设置
             const restoredSettings = {
@@ -290,7 +298,8 @@ export default function Home() {
     const characterHistories = getAllCharacterHistories();
     const characterGroups = storage.getCharacterGroups();
     const meetings = meetingStorage.getMeetings();
-    const data = gistSyncService.exportFullData(characters, chatSessions, characterHistories, characterGroups, meetings, apiSettings);
+    const memos = memoStorage.getMemos();
+    const data = gistSyncService.exportFullData(characters, chatSessions, characterHistories, characterGroups, meetings, memos, apiSettings);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -316,18 +325,20 @@ export default function Home() {
       const content = event.target?.result as string;
       const data = gistSyncService.importData(content);
 
-      if (data && (data.characters || data.chatSessions || data.settings || data.characterGroups || data.meetings)) {
+      if (data && (data.characters || data.chatSessions || data.settings || data.characterGroups || data.meetings || data.memos)) {
         const hasCharacters = data.characters && data.characters.length > 0;
         const hasChatSessions = data.chatSessions && Object.keys(data.chatSessions).length > 0;
         const hasSettings = data.settings && Object.keys(data.settings).length > 0;
         const hasGroups = data.characterGroups && data.characterGroups.length > 0;
         const hasMeetings = data.meetings && data.meetings.length > 0;
+        const hasMemos = data.memos && data.memos.length > 0;
 
         let message = '找到数据，是否导入？';
         const parts: string[] = [];
         if (hasCharacters) parts.push(`${data.characters.length} 个角色`);
         if (hasGroups) parts.push(`${data.characterGroups.length} 个分组`);
         if (hasMeetings) parts.push(`${data.meetings.length} 个会议`);
+        if (hasMemos) parts.push(`${data.memos.length} 条备忘录`);
         if (hasChatSessions) parts.push('聊天记录');
         if (hasSettings) parts.push('设置');
         if (parts.length > 0) {
@@ -358,6 +369,11 @@ export default function Home() {
           // 恢复会议记录
           if (hasMeetings && data.meetings) {
             meetingStorage.saveMeetings(data.meetings);
+          }
+
+          // 恢复备忘录
+          if (hasMemos && data.memos) {
+            memoStorage.saveMemos(data.memos);
           }
 
           if (hasSettings) {

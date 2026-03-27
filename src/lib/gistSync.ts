@@ -1,5 +1,6 @@
 import { Character, ChatSession, CharacterGroup, ChatHistory } from '@/types/character';
 import { MeetingSession } from '@/types/meeting';
+import { MemoItem } from './memoStorage';
 
 export interface GistConfig {
   token: string;
@@ -12,6 +13,7 @@ export interface SyncData {
   characterHistories: Record<string, ChatHistory[]>;
   characterGroups: CharacterGroup[];
   meetings: MeetingSession[];
+  memos: MemoItem[];
   settings: Record<string, any>;
   version: string;
   lastSync: number;
@@ -187,6 +189,7 @@ export class GistSyncService {
     characterHistories: Record<string, ChatHistory[]>,
     characterGroups: CharacterGroup[],
     meetings: MeetingSession[],
+    memos: MemoItem[],
     settings: Record<string, any>
   ): SyncData {
     return {
@@ -195,6 +198,7 @@ export class GistSyncService {
       characterHistories,
       characterGroups,
       meetings,
+      memos,
       settings: {
         ...settings,
         apiKey: settings.apiKey ? '***encrypted***' : '',
@@ -211,6 +215,7 @@ export class GistSyncService {
     characterHistories: Record<string, ChatHistory[]>,
     characterGroups: CharacterGroup[],
     meetings: MeetingSession[],
+    memos: MemoItem[],
     settings: Record<string, any>
   ): string {
     const data: SyncData = {
@@ -219,6 +224,7 @@ export class GistSyncService {
       characterHistories,
       characterGroups,
       meetings,
+      memos,
       settings,
       version: DATA_VERSION,
       lastSync: Date.now(),

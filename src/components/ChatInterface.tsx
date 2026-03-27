@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Character, Message, ChatHistory } from '@/types/character';
 import { storage } from '@/lib/storage';
 import { apiService } from '@/lib/api';
-import { X, Mic, Volume2, VolumeX, MoreHorizontal, Smile, Plus, History, MessageSquare, Bookmark } from 'lucide-react';
+import { X, Mic, Volume2, VolumeX, MoreHorizontal, Smile, Plus, History, MessageSquare, Bookmark, Check } from 'lucide-react';
 import { memoStorage } from '@/lib/memoStorage';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -53,6 +53,12 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
   const [histories, setHistories] = useState<ChatHistory[]>([]);
   const [currentHistoryId, setCurrentHistoryId] = useState<string | null>(null);
   const [memoSavedMessage, setMemoSavedMessage] = useState('');
+  
+  // 文本选择收藏相关状态
+  const [selectedText, setSelectedText] = useState('');
+  const [showTextSelectionMenu, setShowTextSelectionMenu] = useState(false);
+  const [selectionMenuPosition, setSelectionMenuPosition] = useState({ x: 0, y: 0 });
+  const [isSelectingMode, setIsSelectingMode] = useState(false);
   
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [tempSettings, setTempSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -262,6 +268,37 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
     memoStorage.addMemo(content, character.name, character.avatar);
     setMemoSavedMessage('已收藏到备忘录');
     setTimeout(() => setMemoSavedMessage(''), 2000);
+  };
+
+  // 处理文本选择
+  const handleTextSelection = () => {
+    const selection = window.getSelection();
+    if (selection && selection.toString().trim()) {
+      const text = selection.toString().trim();
+      const range = selection.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      
+      setSelectedText(text);
+      setSelectionMenuPosition({
+        x: rect.left + rect.width / 2,
+        y: rect.top - 50
+      });
+      setShowTextSelectionMenu(true);
+    } else {
+      setShowTextSelectionMenu(false);
+    }
+  };
+
+  // 收藏选中的文本
+  const saveSelectedText = () => {
+    if (selectedText) {
+      memoStorage.addMemo(selectedText, character.name, character.avatar);
+      setMemoSavedMessage('已收藏选中内容');
+      setTimeout(() => setMemoSavedMessage(''), 2000);
+      setShowTextSelectionMenu(false);
+      setSelectedText('');
+      window.getSelection()?.removeAllRanges();
+    }
   };
 
   const toggleVoiceInput = () => {
@@ -574,7 +611,11 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
                         : undefined
                     }
                   >
-                    <p className="whitespace-pre-wrap">{message.content}</p>
+                    <p 
+                      className="whitespace-pre-wrap select-text cursor-text"
+                      onMouseUp={handleTextSelection}
+                      onTouchEnd={handleTextSelection}
+                    >{message.content}</p>
                   </div>
                   {/* 语音朗读按钮 - 仅角色消息显示 */}
                   {message.role === 'assistant' && (
@@ -586,12 +627,12 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
                       <Volume2 className="w-4 h-4 text-gray-400 hover:text-[#07C160]" />
                     </button>
                   )}
-                  {/* 收藏按钮 - 仅角色消息显示 */}
+                  {/* 整段收藏按钮 - 仅角色消息显示 */}
                   {message.role === 'assistant' && (
                     <button
                       onClick={() => saveToMemo(message.content)}
                       className="absolute -right-8 top-[calc(50%+20px)] -translate-y-1/2 p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="收藏到备忘录"
+                      title="收藏整段到备忘录"
                     >
                       <Bookmark className="w-4 h-4 text-gray-400 hover:text-yellow-500" />
                     </button>
@@ -820,6 +861,50 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 文本选择悬浮菜单 */}
+      {showTextSelectionMenu && selectedText && (
+        <div
+          className="fixed z-50 bg-gray-800 text-white rounded-lg shadow-lg px-3 py-2 flex items-center gap-2"
+          style={{
+            left: `${Math.min(Math.max(selectionMenuPosition.x - 60, 10), window.innerWidth - 130)}px`,
+            top: `${Math.max(selectionMenuPosition.y, 50)}px`,
+          }}
+        >
+          <span className="text-xs text-gray-300 max-w-[150px] truncate">
+            选中 {selectedText.length} 字
+          </span>
+          <button
+            onClick={saveSelectedText}
+            className="flex items-center gap-1 px-2 py-1 bg-yellow-500 hover:bg-yellow-600 rounded text-xs font-medium transition-colors"
+          >
+            <Bookmark className="w-3 h-3" />
+            收藏
+          </button>
+          <button
+            onClick={() => {
+              setShowTextSelectionMenu(false);
+              setSelectedText('');
+              window.getSelection()?.removeAllRanges();
+            }}
+            className="p-1 hover:bg-gray-700 rounded"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+
+      {/* 点击其他地方关闭选择菜单 */}
+      {showTextSelectionMenu && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => {
+            setShowTextSelectionMenu(false);
+            setSelectedText('');
+            window.getSelection()?.removeAllRanges();
+          }}
+        />
       )}
     </div>
   );

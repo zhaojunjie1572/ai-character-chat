@@ -1142,7 +1142,7 @@ ${contextText || '（刚开始讨论）'}
       {/* 会议记录弹窗 */}
       {showMeetingRecord && currentMeeting && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg w-full max-w-3xl max-h-[85vh] flex flex-col">
+          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[85vh] flex flex-col">
             {/* 弹窗头部 */}
             <div className="flex justify-between items-center p-4 border-b">
               <div>
@@ -1177,73 +1177,108 @@ ${contextText || '（刚开始讨论）'}
               </div>
             </div>
 
-            {/* 会议统计 */}
-            <div className="flex items-center gap-6 px-4 py-3 bg-gray-50 border-b text-sm">
-              <span className="text-gray-600">
-                <span className="font-medium text-gray-900">{currentMeeting.messages.length}</span> 条消息
-              </span>
-              <span className="text-gray-600">
-                <span className="font-medium text-gray-900">{currentMeeting.participants.length}</span> 位参与者
-              </span>
-              <span className="text-gray-600">
-                <span className="font-medium text-gray-900">{currentMeeting.currentRound}</span> 轮次
-              </span>
-              <span className="text-gray-600">
-                创建于 {new Date(currentMeeting.createdAt).toLocaleString()}
-              </span>
-            </div>
-
-            {/* 消息列表 */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[60vh]">
-              {currentMeeting.messages.length === 0 ? (
-                <div className="text-center text-gray-500 py-12">
-                  <p>暂无会议记录</p>
+            <div className="flex flex-1 overflow-hidden">
+              {/* 左侧：历史会议列表 */}
+              <div className="w-64 border-r bg-gray-50 overflow-y-auto">
+                <div className="p-3 border-b bg-gray-100">
+                  <h4 className="text-sm font-medium text-gray-700">历史会议</h4>
                 </div>
-              ) : (
-                currentMeeting.messages.map((message, index) => {
-                  const isUser = message.role === 'user';
-                  const participant = !isUser
-                    ? currentMeeting.participants.find(p => p.characterId === message.characterId)
-                    : null;
-
-                  return (
-                    <div key={message.id} className="flex gap-3">
-                      {/* 头像 */}
-                      <div className="shrink-0">
-                        {isUser ? (
-                          <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-                            <span className="text-gray-600 text-sm">主持</span>
-                          </div>
-                        ) : participant ? (
-                          <img
-                            src={participant.character.avatar}
-                            alt={participant.character.name}
-                            className="w-10 h-10 rounded-full object-cover"
-                          />
-                        ) : null}
-                      </div>
-
-                      {/* 内容 */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-sm">
-                            {isUser ? '主持人' : participant?.character.name || '未知'}
-                          </span>
-                          <span className="text-xs text-gray-400">
-                            {new Date(message.timestamp).toLocaleString()}
-                          </span>
-                          {message.round > 0 && (
-                            <span className="text-xs text-gray-400">第{message.round}轮</span>
-                          )}
-                        </div>
-                        <div className="text-sm text-gray-700 whitespace-pre-wrap break-words">
-                          {message.content}
-                        </div>
-                      </div>
+                {meetings.map(meeting => (
+                  <div
+                    key={meeting.id}
+                    onClick={() => {
+                      setCurrentMeeting(meeting);
+                    }}
+                    className={`p-3 border-b cursor-pointer transition-colors ${
+                      meeting.id === currentMeeting.id
+                        ? 'bg-blue-50 border-blue-200'
+                        : 'hover:bg-gray-100'
+                    }`}
+                  >
+                    <div className="font-medium text-sm text-gray-900 truncate">
+                      {meeting.title}
                     </div>
-                  );
-                })
-              )}
+                    <div className="text-xs text-gray-500 mt-1">
+                      {meeting.messages.length} 条消息 · {meeting.participants.length} 人
+                    </div>
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      {new Date(meeting.createdAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* 右侧：消息详情 */}
+              <div className="flex-1 flex flex-col">
+                {/* 会议统计 */}
+                <div className="flex items-center gap-6 px-4 py-3 bg-gray-50 border-b text-sm">
+                  <span className="text-gray-600">
+                    <span className="font-medium text-gray-900">{currentMeeting.messages.length}</span> 条消息
+                  </span>
+                  <span className="text-gray-600">
+                    <span className="font-medium text-gray-900">{currentMeeting.participants.length}</span> 位参与者
+                  </span>
+                  <span className="text-gray-600">
+                    <span className="font-medium text-gray-900">{currentMeeting.currentRound}</span> 轮次
+                  </span>
+                  <span className="text-gray-600">
+                    创建于 {new Date(currentMeeting.createdAt).toLocaleString()}
+                  </span>
+                </div>
+
+                {/* 消息列表 */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  {currentMeeting.messages.length === 0 ? (
+                    <div className="text-center text-gray-500 py-12">
+                      <p>暂无会议记录</p>
+                    </div>
+                  ) : (
+                    currentMeeting.messages.map((message, index) => {
+                      const isUser = message.role === 'user';
+                      const participant = !isUser
+                        ? currentMeeting.participants.find(p => p.characterId === message.characterId)
+                        : null;
+
+                      return (
+                        <div key={message.id} className="flex gap-3">
+                          {/* 头像 */}
+                          <div className="shrink-0">
+                            {isUser ? (
+                              <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                                <span className="text-gray-600 text-sm">主持</span>
+                              </div>
+                            ) : participant ? (
+                              <img
+                                src={participant.character.avatar}
+                                alt={participant.character.name}
+                                className="w-10 h-10 rounded-full object-cover"
+                              />
+                            ) : null}
+                          </div>
+
+                          {/* 内容 */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-medium text-sm">
+                                {isUser ? '主持人' : participant?.character.name || '未知'}
+                              </span>
+                              <span className="text-xs text-gray-400">
+                                {new Date(message.timestamp).toLocaleString()}
+                              </span>
+                              {message.round > 0 && (
+                                <span className="text-xs text-gray-400">第{message.round}轮</span>
+                              )}
+                            </div>
+                            <div className="text-sm text-gray-700 whitespace-pre-wrap break-words">
+                              {message.content}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* 底部 */}

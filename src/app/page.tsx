@@ -6,7 +6,7 @@ import {
   MoreHorizontal, X, Settings, Key, Sparkles, 
   Volume2, Cloud, Download, Upload, RefreshCw, 
   Check, AlertCircle, Trash2, Edit3, Smile, Plus as PlusIcon,
-  UsersRound
+  UsersRound, Folder, ChevronRight, ChevronLeft, Mic, Edit
 } from 'lucide-react';
 import { useCharacters } from '@/hooks/useCharacters';
 import { CharacterForm } from '@/components/CharacterForm';
@@ -78,6 +78,12 @@ export default function Home() {
   const [groups, setGroups] = useState<CharacterGroup[]>([]);
   const [showGroupManager, setShowGroupManager] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  // 备忘录相关状态
+  const [showService, setShowService] = useState(false);
+  const [serviceSearchQuery, setServiceSearchQuery] = useState('');
+  const [serviceView, setServiceView] = useState<'folders' | 'notes'>('folders');
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
 
   useEffect(() => {
     const savedSettings = localStorage.getItem('ai_app_settings');
@@ -957,9 +963,14 @@ export default function Home() {
             
             <div className="space-y-2">
               <div className="bg-white">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                <div 
+                  className="flex items-center justify-between px-4 py-3 border-b border-gray-100 cursor-pointer active:bg-gray-100"
+                  onClick={() => setShowService(true)}
+                >
                   <div className="flex items-center gap-3">
-                    <div className="w-7 h-7 shrink-0" />
+                    <div className="w-7 h-7 shrink-0 flex items-center justify-center">
+                      <Folder className="w-6 h-6 text-yellow-500" />
+                    </div>
                     <span className="text-base text-gray-900">服务</span>
                   </div>
                 </div>
@@ -1456,6 +1467,184 @@ export default function Home() {
                 className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm"
               >
                 关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 服务 - 备忘录风格页面 */}
+      {showService && (
+        <div className="fixed inset-0 bg-[#F2F2F6] z-50 flex flex-col">
+          {/* 顶部导航 */}
+          <div className="bg-[#F2F2F6] px-4 pt-12 pb-2">
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => {
+                  if (serviceView === 'notes') {
+                    setServiceView('folders');
+                    setSelectedFolder(null);
+                  } else {
+                    setShowService(false);
+                  }
+                }}
+                className="flex items-center gap-1 text-[#007AFF] text-base"
+              >
+                {serviceView === 'folders' ? (
+                  <>
+                    <ChevronLeft className="w-5 h-5" />
+                    <span>返回</span>
+                  </>
+                ) : (
+                  <>
+                    <ChevronLeft className="w-5 h-5" />
+                    <span>文件夹</span>
+                  </>
+                )}
+              </button>
+              <div className="flex items-center gap-3">
+                {serviceView === 'folders' ? (
+                  <>
+                    <button className="p-2">
+                      <Folder className="w-6 h-6 text-[#FF9500]" />
+                    </button>
+                    <span className="text-base font-medium text-gray-900">文件夹</span>
+                    <button className="px-3 py-1 text-[#007AFF] text-base font-medium">
+                      编辑
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xl font-bold text-gray-900">备忘录</span>
+                    <button className="p-2">
+                      <MoreHorizontal className="w-6 h-6 text-[#007AFF]" />
+                    </button>
+                  </>
+                )}
+              </div>
+              <div className="w-16" />
+            </div>
+          </div>
+
+          {/* 内容区域 */}
+          <div className="flex-1 overflow-y-auto px-4">
+            {serviceView === 'folders' ? (
+              /* 文件夹列表 */
+              <div className="space-y-4">
+                {/* iCloud 区域 */}
+                <div>
+                  <h2 className="text-sm font-medium text-gray-500 mb-2 ml-2">iCloud</h2>
+                  <div className="bg-white rounded-xl overflow-hidden">
+                    <div
+                      onClick={() => {
+                        setSelectedFolder('memo');
+                        setServiceView('notes');
+                      }}
+                      className="flex items-center justify-between px-4 py-3 cursor-pointer active:bg-gray-100"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Folder className="w-7 h-7 text-[#FF9500]" />
+                        <span className="text-base text-gray-900">备忘录</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-gray-400">
+                        <span className="text-base">{characters.length}</span>
+                        <ChevronRight className="w-5 h-5" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 我的账户区域 */}
+                <div>
+                  <h2 className="text-sm font-medium text-gray-500 mb-2 ml-2">我的账户</h2>
+                  <div className="bg-white rounded-xl overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                      <div className="flex items-center gap-3">
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center">
+                          <Users className="w-4 h-4 text-white" />
+                        </div>
+                        <span className="text-base text-gray-900">角色</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-gray-400">
+                        <span className="text-base">{characters.length}</span>
+                        <ChevronRight className="w-5 h-5" />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-400 to-cyan-400 flex items-center justify-center">
+                          <UsersRound className="w-4 h-4 text-white" />
+                        </div>
+                        <span className="text-base text-gray-900">会议室</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-gray-400">
+                        <span className="text-base">{meetingStorage.getMeetings().length}</span>
+                        <ChevronRight className="w-5 h-5" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* 备忘录列表 */
+              <div className="space-y-2">
+                {characters.length === 0 ? (
+                  <div className="text-center text-gray-400 py-12">
+                    <p className="text-base">暂无备忘录</p>
+                  </div>
+                ) : (
+                  characters.map((character, index) => (
+                    <div
+                      key={character.id}
+                      onClick={() => {
+                        setChattingCharacter(character);
+                        setShowService(false);
+                        setActiveTab('wechat');
+                      }}
+                      className="bg-white rounded-xl px-4 py-3 cursor-pointer active:bg-gray-50"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="text-[#007AFF] text-sm font-medium shrink-0">{index + 1}.</span>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-base font-medium text-gray-900 truncate">{character.name}</h3>
+                          <p className="text-sm text-gray-500 mt-0.5 truncate">{character.title || '暂无描述'}</p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {new Date(character.createdAt || Date.now()).toLocaleDateString('zh-CN', {
+                              year: 'numeric',
+                              month: 'numeric',
+                              day: 'numeric'
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 底部搜索栏 */}
+          <div className="bg-[#F2F2F6] px-4 pb-8 pt-2">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 bg-white rounded-xl flex items-center gap-2 px-3 py-2.5">
+                <Search className="w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="搜索"
+                  value={serviceSearchQuery}
+                  onChange={(e) => setServiceSearchQuery(e.target.value)}
+                  className="flex-1 bg-transparent text-base outline-none placeholder:text-gray-400"
+                />
+                <button className="p-1">
+                  <Mic className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+              <button 
+                onClick={() => setShowForm(true)}
+                className="w-11 h-11 bg-white rounded-xl flex items-center justify-center shadow-sm"
+              >
+                <Edit className="w-5 h-5 text-[#007AFF]" />
               </button>
             </div>
           </div>

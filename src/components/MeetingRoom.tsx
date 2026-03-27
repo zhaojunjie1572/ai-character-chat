@@ -1010,7 +1010,16 @@ ${contextText || '（刚开始讨论）'}
             )}
 
             <button
-              onClick={() => setShowMeetingRecord(true)}
+              onClick={() => {
+                // 刷新会议数据以确保显示最新消息
+                if (currentMeeting) {
+                  const refreshedMeeting = meetingStorage.getMeeting(currentMeeting.id);
+                  if (refreshedMeeting) {
+                    setCurrentMeeting(refreshedMeeting);
+                  }
+                }
+                setShowMeetingRecord(true);
+              }}
               className="flex items-center gap-1 px-3 py-1.5 mr-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 transition-colors"
               title="查看会议记录"
             >

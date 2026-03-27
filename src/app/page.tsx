@@ -235,7 +235,13 @@ export default function Home() {
           }
 
           if (hasSettings) {
-            const restoredSettings = { ...DEFAULT_SETTINGS, ...data.settings };
+            // 保留本地的敏感信息（Token 等），只恢复其他设置
+            const restoredSettings = {
+              ...DEFAULT_SETTINGS,
+              ...data.settings,
+              apiKey: currentSettings.apiKey,      // 保留本地 API Key
+              gistToken: currentSettings.gistToken, // 保留本地 GitHub Token
+            };
             setApiSettings(restoredSettings);
             setTempSettings(restoredSettings);
             localStorage.setItem('ai_app_settings', JSON.stringify(restoredSettings));
@@ -276,6 +282,9 @@ export default function Home() {
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // 获取当前设置，用于保留敏感信息
+    const currentSettings = { ...apiSettings, ...tempSettings };
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -327,7 +336,13 @@ export default function Home() {
           }
 
           if (hasSettings) {
-            const restoredSettings = { ...DEFAULT_SETTINGS, ...data.settings };
+            // 保留本地的敏感信息（Token 等），只恢复其他设置
+            const restoredSettings = {
+              ...DEFAULT_SETTINGS,
+              ...data.settings,
+              apiKey: currentSettings.apiKey,      // 保留本地 API Key
+              gistToken: currentSettings.gistToken, // 保留本地 GitHub Token
+            };
             setApiSettings(restoredSettings);
             setTempSettings(restoredSettings);
             localStorage.setItem('ai_app_settings', JSON.stringify(restoredSettings));

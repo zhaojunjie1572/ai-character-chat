@@ -863,7 +863,7 @@ ${contextText || '（刚开始讨论）'}
     if (!currentMeeting) return;
 
     if (currentMeeting.messages.length > 0) {
-      if (!confirm('确定要开始新议题吗？当前会议记录已自动保存。')) {
+      if (!confirm('确定要开始新议题吗？\n\n当前会议记录可在"会议记录"按钮中查看。')) {
         return;
       }
     }

@@ -13,6 +13,7 @@ import { CharacterForm } from '@/components/CharacterForm';
 import { ChatInterface } from '@/components/ChatInterface';
 import { MeetingRoom } from '@/components/MeetingRoom';
 import { meetingStorage } from '@/lib/meetingStorage';
+import { memoStorage, MemoItem } from '@/lib/memoStorage';
 import { Avatar } from '@/components/Avatar';
 import { Character, CharacterGroup } from '@/types/character';
 import { gistSyncService } from '@/lib/gistSync';
@@ -84,6 +85,8 @@ export default function Home() {
   const [serviceSearchQuery, setServiceSearchQuery] = useState('');
   const [serviceView, setServiceView] = useState<'folders' | 'notes'>('folders');
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [memos, setMemos] = useState<MemoItem[]>([]);
+  const [filteredMemos, setFilteredMemos] = useState<MemoItem[]>([]);
 
   useEffect(() => {
     const savedSettings = localStorage.getItem('ai_app_settings');
@@ -108,6 +111,22 @@ export default function Home() {
   useEffect(() => {
     setGroups(storage.getCharacterGroups());
   }, [characters]); // 当角色列表变化时重新加载分组
+
+  // 加载备忘录数据
+  useEffect(() => {
+    const loadedMemos = memoStorage.getMemos();
+    setMemos(loadedMemos);
+    setFilteredMemos(loadedMemos);
+  }, [showService]); // 当打开服务页面时重新加载
+
+  // 搜索备忘录
+  useEffect(() => {
+    if (serviceSearchQuery.trim()) {
+      setFilteredMemos(memoStorage.searchMemos(serviceSearchQuery));
+    } else {
+      setFilteredMemos(memos);
+    }
+  }, [serviceSearchQuery, memos]);
 
   const handleSaveSettings = () => {
     localStorage.setItem('ai_app_settings', JSON.stringify(tempSettings));
@@ -1547,7 +1566,7 @@ export default function Home() {
                         <span className="text-base text-gray-900">备忘录</span>
                       </div>
                       <div className="flex items-center gap-2 text-gray-400">
-                        <span className="text-base">{characters.length}</span>
+                        <span className="text-base">{memos.length}</span>
                         <ChevronRight className="w-5 h-5" />
                       </div>
                     </div>
@@ -1588,34 +1607,51 @@ export default function Home() {
             ) : (
               /* 备忘录列表 */
               <div className="space-y-2">
-                {characters.length === 0 ? (
+                {filteredMemos.length === 0 ? (
                   <div className="text-center text-gray-400 py-12">
-                    <p className="text-base">暂无备忘录</p>
+                    <p className="text-base">{serviceSearchQuery ? '没有找到匹配的备忘录' : '暂无备忘录'}</p>
+                    <p className="text-sm mt-2">在聊天时长按消息即可收藏</p>
                   </div>
                 ) : (
-                  characters.map((character, index) => (
+                  filteredMemos.map((memo, index) => (
                     <div
-                      key={character.id}
-                      onClick={() => {
-                        setChattingCharacter(character);
-                        setShowService(false);
-                        setActiveTab('wechat');
-                      }}
+                      key={memo.id}
                       className="bg-white rounded-xl px-4 py-3 cursor-pointer active:bg-gray-50"
                     >
                       <div className="flex items-start gap-3">
                         <span className="text-[#007AFF] text-sm font-medium shrink-0">{index + 1}.</span>
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-base font-medium text-gray-900 truncate">{character.name}</h3>
-                          <p className="text-sm text-gray-500 mt-0.5 truncate">{character.title || '暂无描述'}</p>
-                          <p className="text-xs text-gray-400 mt-1">
-                            {new Date(character.createdAt || Date.now()).toLocaleDateString('zh-CN', {
-                              year: 'numeric',
-                              month: 'numeric',
-                              day: 'numeric'
-                            })}
-                          </p>
+                          <p className="text-base text-gray-900 line-clamp-3">{memo.content}</p>
+                          <div className="flex items-center gap-2 mt-2">
+                            {memo.characterAvatar && (
+                              <img 
+                                src={memo.characterAvatar} 
+                                alt={memo.characterName}
+                                className="w-5 h-5 rounded-full object-cover"
+                              />
+                            )}
+                            <span className="text-xs text-gray-500">{memo.characterName}</span>
+                            <span className="text-xs text-gray-400">
+                              {new Date(memo.timestamp).toLocaleDateString('zh-CN', {
+                                year: 'numeric',
+                                month: 'numeric',
+                                day: 'numeric'
+                              })}
+                            </span>
+                          </div>
                         </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm('确定要删除这条备忘录吗？')) {
+                              memoStorage.deleteMemo(memo.id);
+                              setMemos(memos.filter(m => m.id !== memo.id));
+                            }
+                          }}
+                          className="p-2 text-gray-400 hover:text-red-500"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
                   ))

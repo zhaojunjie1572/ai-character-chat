@@ -4,7 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Character, Message, ChatHistory } from '@/types/character';
 import { storage } from '@/lib/storage';
 import { apiService } from '@/lib/api';
-import { X, Mic, Volume2, VolumeX, MoreHorizontal, Smile, Plus, History, MessageSquare } from 'lucide-react';
+import { X, Mic, Volume2, VolumeX, MoreHorizontal, Smile, Plus, History, MessageSquare, Bookmark } from 'lucide-react';
+import { memoStorage } from '@/lib/memoStorage';
 import { v4 as uuidv4 } from 'uuid';
 
 interface ChatInterfaceProps {
@@ -51,6 +52,7 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
   const [savedMessage, setSavedMessage] = useState('');
   const [histories, setHistories] = useState<ChatHistory[]>([]);
   const [currentHistoryId, setCurrentHistoryId] = useState<string | null>(null);
+  const [memoSavedMessage, setMemoSavedMessage] = useState('');
   
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [tempSettings, setTempSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -253,6 +255,13 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
       window.speechSynthesis.cancel();
       setIsSpeaking(false);
     }
+  };
+
+  // 收藏消息到备忘录
+  const saveToMemo = (content: string) => {
+    memoStorage.addMemo(content, character.name, character.avatar);
+    setMemoSavedMessage('已收藏到备忘录');
+    setTimeout(() => setMemoSavedMessage(''), 2000);
   };
 
   const toggleVoiceInput = () => {
@@ -518,6 +527,13 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
         </div>
       )}
 
+      {memoSavedMessage && (
+        <div className="px-4 py-2 bg-yellow-50 border-b border-yellow-100 flex items-center gap-2 text-yellow-600 text-sm shrink-0">
+          <Bookmark className="w-4 h-4" />
+          <span>{memoSavedMessage}</span>
+        </div>
+      )}
+
       {/* 消息列表 - 微信风格 */}
       <div 
         className="flex-1 overflow-y-auto px-3 py-4 bg-[#EDEDED]"
@@ -568,6 +584,16 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
                       title="朗读消息"
                     >
                       <Volume2 className="w-4 h-4 text-gray-400 hover:text-[#07C160]" />
+                    </button>
+                  )}
+                  {/* 收藏按钮 - 仅角色消息显示 */}
+                  {message.role === 'assistant' && (
+                    <button
+                      onClick={() => saveToMemo(message.content)}
+                      className="absolute -right-8 top-[calc(50%+20px)] -translate-y-1/2 p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="收藏到备忘录"
+                    >
+                      <Bookmark className="w-4 h-4 text-gray-400 hover:text-yellow-500" />
                     </button>
                   )}
                   {!settings.backgroundImage && (

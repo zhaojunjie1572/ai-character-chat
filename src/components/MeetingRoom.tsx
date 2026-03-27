@@ -86,6 +86,13 @@ export function MeetingRoom({ characters, onClose }: MeetingRoomProps) {
   // 显示会议记录弹窗
   const [showMeetingRecord, setShowMeetingRecord] = useState(false);
 
+  // 移动端菜单
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  // 移动端显示左侧参与者列表
+  const [showMobileParticipants, setShowMobileParticipants] = useState(false);
+  // 移动端显示右侧设置面板
+  const [showMobileSettings, setShowMobileSettings] = useState(false);
+
   // 创建表单状态
   const [meetingTitle, setMeetingTitle] = useState('');
   const [meetingTopic, setMeetingTopic] = useState('');
@@ -965,89 +972,98 @@ ${contextText || '（刚开始讨论）'}
           <X className="w-6 h-6 text-gray-700" />
         </button>
 
-        <div className="flex-1 flex items-center gap-2">
-          <Users className="w-5 h-5 text-gray-600" />
-          <h2 className="font-semibold text-gray-900">会议室</h2>
+        <div className="flex-1 flex items-center gap-2 min-w-0">
+          <Users className="w-5 h-5 text-gray-600 shrink-0" />
+          <h2 className="font-semibold text-gray-900 truncate">会议室</h2>
         </div>
 
         {currentMeeting && (
           <>
-            {/* 风暴模式按钮 */}
-            {/* 新议题按钮 */}
+            {/* 移动端菜单按钮 */}
             <button
-              onClick={handleNewTopic}
-              className="flex items-center gap-1 px-3 py-1.5 mr-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors"
-              title="开始新议题（保留参与者，清空消息）"
+              onClick={() => setShowMobileMenu(true)}
+              className="md:hidden p-2 hover:bg-gray-200 rounded-full transition-colors mr-1"
+              title="更多选项"
             >
-              <Plus className="w-4 h-4" />
-              新议题
+              <Settings className="w-5 h-5 text-gray-600" />
             </button>
 
-            {!stormMode ? (
+            {/* 桌面端按钮 */}
+            <div className="hidden md:flex items-center">
+              {/* 新议题按钮 */}
+              <button
+                onClick={handleNewTopic}
+                className="flex items-center gap-1 px-3 py-1.5 mr-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors"
+                title="开始新议题（保留参与者，清空消息）"
+              >
+                <Plus className="w-4 h-4" />
+                新议题
+              </button>
+
+              {!stormMode ? (
+                <button
+                  onClick={() => {
+                    const topic = prompt('请输入风暴模式的话题：', currentMeeting.topic || '自由讨论');
+                    if (topic) {
+                      const rounds = parseInt(prompt('请输入最大轮数（默认10轮）：', '10') || '10');
+                      setStormMaxRounds(rounds);
+                      startStormMode(topic);
+                    }
+                  }}
+                  className="flex items-center gap-1 px-3 py-1.5 mr-2 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600 transition-colors"
+                  title="启动风暴模式"
+                >
+                  <Zap className="w-4 h-4" />
+                  风暴模式
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 mr-2">
+                  <button
+                    onClick={toggleStormPause}
+                    className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                      stormPaused
+                        ? 'bg-green-500 text-white hover:bg-green-600'
+                        : 'bg-yellow-500 text-white hover:bg-yellow-600'
+                    }`}
+                  >
+                    {stormPaused ? <Play className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                    {stormPaused ? '继续' : '暂停'}
+                  </button>
+                  <button
+                    onClick={stopStormMode}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                    停止
+                  </button>
+                </div>
+              )}
+
               <button
                 onClick={() => {
-                  const topic = prompt('请输入风暴模式的话题：', currentMeeting.topic || '自由讨论');
-                  if (topic) {
-                    const rounds = parseInt(prompt('请输入最大轮数（默认10轮）：', '10') || '10');
-                    setStormMaxRounds(rounds);
-                    startStormMode(topic);
+                  if (currentMeeting) {
+                    const refreshedMeeting = meetingStorage.getMeeting(currentMeeting.id);
+                    if (refreshedMeeting) {
+                      setCurrentMeeting(refreshedMeeting);
+                    }
                   }
+                  setShowMeetingRecord(true);
                 }}
-                className="flex items-center gap-1 px-3 py-1.5 mr-2 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600 transition-colors"
-                title="启动风暴模式"
+                className="flex items-center gap-1 px-3 py-1.5 mr-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 transition-colors"
+                title="查看会议记录"
               >
-                <Zap className="w-4 h-4" />
-                风暴模式
+                <Download className="w-4 h-4" />
+                会议记录
               </button>
-            ) : (
-              <div className="flex items-center gap-2 mr-2">
-                <button
-                  onClick={toggleStormPause}
-                  className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                    stormPaused
-                      ? 'bg-green-500 text-white hover:bg-green-600'
-                      : 'bg-yellow-500 text-white hover:bg-yellow-600'
-                  }`}
-                >
-                  {stormPaused ? <Play className="w-4 h-4" /> : <Square className="w-4 h-4" />}
-                  {stormPaused ? '继续' : '暂停'}
-                </button>
-                <button
-                  onClick={stopStormMode}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                  停止
-                </button>
-              </div>
-            )}
-
-            <button
-              onClick={() => {
-                // 刷新会议数据以确保显示最新消息
-                if (currentMeeting) {
-                  const refreshedMeeting = meetingStorage.getMeeting(currentMeeting.id);
-                  if (refreshedMeeting) {
-                    setCurrentMeeting(refreshedMeeting);
-                  }
-                }
-                setShowMeetingRecord(true);
-              }}
-              className="flex items-center gap-1 px-3 py-1.5 mr-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 transition-colors"
-              title="查看会议记录"
-            >
-              <Download className="w-4 h-4" />
-              会议记录
-            </button>
-            
-            {/* 清空所有消息按钮 */}
-            <button
-              onClick={handleClearAllMessages}
-              className="p-2 hover:bg-red-100 rounded-full transition-colors mr-1"
-              title="清空所有消息"
-            >
-              <Trash2 className="w-5 h-5 text-red-500" />
-            </button>
+              
+              <button
+                onClick={handleClearAllMessages}
+                className="p-2 hover:bg-red-100 rounded-full transition-colors mr-1"
+                title="清空所有消息"
+              >
+                <Trash2 className="w-5 h-5 text-red-500" />
+              </button>
+            </div>
             
             <button
               onClick={() => { 
@@ -1056,7 +1072,7 @@ ${contextText || '（刚开始讨论）'}
                 stopSpeaking(); 
                 if (stormMode) stopStormMode();
               }}
-              className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"
+              className="hidden md:block px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"
             >
               返回列表
             </button>
@@ -1069,7 +1085,7 @@ ${contextText || '（刚开始讨论）'}
             className="flex items-center gap-1 px-3 py-1.5 bg-[#07C160] text-white text-sm rounded-lg hover:bg-[#06AD56] transition-colors"
           >
             <Plus className="w-4 h-4" />
-            新建会议
+            <span className="hidden sm:inline">新建会议</span>
           </button>
         )}
       </div>
@@ -1484,56 +1500,97 @@ ${contextText || '（刚开始讨论）'}
 
       {/* 会议室界面 */}
       {currentMeeting && (
-        <div className="flex-1 flex overflow-hidden">
-          {/* 左侧参与者列表 */}
-          <div className="w-16 bg-white border-r border-gray-200 flex flex-col items-center py-4 shrink-0">
-            {currentMeeting.participants.map((p, index) => {
-              const colors = PARTICIPANT_COLORS[index % PARTICIPANT_COLORS.length];
-              return (
-                <div key={p.characterId} className="mb-3 relative group">
-                  <div className={`w-10 h-10 rounded-lg overflow-hidden border-2 ${colors.border}`}>
-                    <img
-                      src={p.character.avatar}
-                      alt={p.character.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap z-10 pointer-events-none">
-                    {p.character.name}
-                  </div>
-                  {/* 颜色指示器 */}
-                  <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full ${colors.bg} ${colors.border} border flex items-center justify-center`}>
-                    <span className={`text-[8px] font-bold ${colors.name}`}>{index + 1}</span>
-                  </div>
-                  {/* 移除参与者按钮 */}
-                  <button
-                    onClick={() => {
-                      if (confirm(`确定要移除 ${p.character.name} 吗？`)) {
-                        meetingStorage.removeParticipant(currentMeeting.id, p.characterId);
-                        const updatedMeeting = meetingStorage.getMeeting(currentMeeting.id);
-                        if (updatedMeeting) {
-                          setCurrentMeeting(updatedMeeting);
-                        }
-                      }
-                    }}
-                    className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[10px]"
-                    title="移除参与者"
-                  >
-                    ×
-                  </button>
-                </div>
-              );
-            })}
-            
-            {/* 添加参与者按钮 */}
+        <div className="flex-1 flex overflow-hidden relative">
+          {/* 移动端左侧切换按钮 */}
+          <button
+            onClick={() => setShowMobileParticipants(true)}
+            className="md:hidden absolute left-2 top-2 z-10 p-2 bg-white/90 backdrop-blur rounded-lg shadow-md border border-gray-200"
+            title="参与者列表"
+          >
+            <Users className="w-5 h-5 text-gray-600" />
+          </button>
+
+          {/* 移动端右侧设置按钮 */}
+          <button
+            onClick={() => setShowMobileSettings(true)}
+            className="md:hidden absolute right-2 top-2 z-10 p-2 bg-white/90 backdrop-blur rounded-lg shadow-md border border-gray-200"
+            title="设置"
+          >
+            <Settings className="w-5 h-5 text-gray-600" />
+          </button>
+
+          {/* 左侧参与者列表 - 桌面端固定，移动端可收起 */}
+          <div className={`
+            bg-white border-r border-gray-200 flex flex-col items-center py-4 shrink-0
+            md:w-16 md:static md:flex
+            fixed inset-y-0 left-0 z-30 w-20 transform transition-transform duration-300
+            ${showMobileParticipants ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+          `}>
+            {/* 移动端关闭按钮 */}
             <button
-              onClick={() => setShowAddParticipant(true)}
-              className="w-10 h-10 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:border-[#07C160] hover:text-[#07C160] transition-colors"
-              title="添加参与者"
+              onClick={() => setShowMobileParticipants(false)}
+              className="md:hidden absolute top-2 right-2 p-1 hover:bg-gray-100 rounded"
             >
-              +
+              <X className="w-4 h-4 text-gray-500" />
             </button>
+
+            <div className="mt-8 md:mt-0 flex-1 overflow-y-auto flex flex-col items-center">
+              {currentMeeting.participants.map((p, index) => {
+                const colors = PARTICIPANT_COLORS[index % PARTICIPANT_COLORS.length];
+                return (
+                  <div key={p.characterId} className="mb-3 relative group">
+                    <div className={`w-10 h-10 rounded-lg overflow-hidden border-2 ${colors.border}`}>
+                      <img
+                        src={p.character.avatar}
+                        alt={p.character.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap z-10 pointer-events-none">
+                      {p.character.name}
+                    </div>
+                    {/* 颜色指示器 */}
+                    <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full ${colors.bg} ${colors.border} border flex items-center justify-center`}>
+                      <span className={`text-[8px] font-bold ${colors.name}`}>{index + 1}</span>
+                    </div>
+                    {/* 移除参与者按钮 */}
+                    <button
+                      onClick={() => {
+                        if (confirm(`确定要移除 ${p.character.name} 吗？`)) {
+                          meetingStorage.removeParticipant(currentMeeting.id, p.characterId);
+                          const updatedMeeting = meetingStorage.getMeeting(currentMeeting.id);
+                          if (updatedMeeting) {
+                            setCurrentMeeting(updatedMeeting);
+                          }
+                        }
+                      }}
+                      className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[10px]"
+                      title="移除参与者"
+                    >
+                      ×
+                    </button>
+                  </div>
+                );
+              })}
+              
+              {/* 添加参与者按钮 */}
+              <button
+                onClick={() => setShowAddParticipant(true)}
+                className="w-10 h-10 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:border-[#07C160] hover:text-[#07C160] transition-colors"
+                title="添加参与者"
+              >
+                +
+              </button>
+            </div>
           </div>
+
+          {/* 移动端遮罩层 */}
+          {showMobileParticipants && (
+            <div 
+              className="md:hidden fixed inset-0 bg-black/30 z-20"
+              onClick={() => setShowMobileParticipants(false)}
+            />
+          )}
 
           {/* 中间消息区域 */}
           <div className="flex-1 flex flex-col min-w-0">
@@ -1859,127 +1916,150 @@ ${contextText || '（刚开始讨论）'}
             </div>
           </div>
 
-          {/* 右侧设置面板 */}
-          <div className="w-48 bg-white border-l border-gray-200 p-4 shrink-0">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">语音设置</h4>
-            
-            {/* 语音朗读开关 */}
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs text-gray-600">自动朗读</span>
-              <button
-                onClick={() => {
-                  const newValue = !settings.voiceEnabled;
-                  const newSettings = { ...settings, voiceEnabled: newValue };
-                  setSettings(newSettings);
-                  localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
-                  if (!newValue) stopSpeaking();
-                }}
-                className={`w-10 h-5 rounded-full transition-colors relative ${
-                  settings.voiceEnabled ? 'bg-[#07C160]' : 'bg-gray-300'
-                }`}
-              >
-                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow ${
-                  settings.voiceEnabled ? 'left-5' : 'left-0.5'
-                }`} />
-              </button>
-            </div>
+          {/* 右侧设置面板 - 桌面端固定，移动端可收起 */}
+          <div className={`
+            bg-white border-l border-gray-200 p-4 shrink-0
+            md:w-48 md:static md:flex md:flex-col
+            fixed inset-y-0 right-0 z-30 w-64 transform transition-transform duration-300 flex flex-col
+            ${showMobileSettings ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}
+          `}>
+            {/* 移动端关闭按钮 */}
+            <button
+              onClick={() => setShowMobileSettings(false)}
+              className="md:hidden absolute top-2 left-2 p-1 hover:bg-gray-100 rounded"
+            >
+              <X className="w-4 h-4 text-gray-500" />
+            </button>
 
-            {/* 语音输入开关 */}
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs text-gray-600">语音输入</span>
-              <button
-                onClick={() => {
-                  const newValue = !settings.voiceInputEnabled;
-                  const newSettings = { ...settings, voiceInputEnabled: newValue };
-                  setSettings(newSettings);
-                  localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
-                }}
-                className={`w-10 h-5 rounded-full transition-colors relative ${
-                  settings.voiceInputEnabled ? 'bg-[#07C160]' : 'bg-gray-300'
-                }`}
-              >
-                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow ${
-                  settings.voiceInputEnabled ? 'left-5' : 'left-0.5'
-                }`} />
-              </button>
-            </div>
+            <div className="mt-8 md:mt-0 flex-1 overflow-y-auto">
+              <h4 className="text-sm font-medium text-gray-700 mb-3">语音设置</h4>
+              
+              {/* 语音朗读开关 */}
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs text-gray-600">自动朗读</span>
+                <button
+                  onClick={() => {
+                    const newValue = !settings.voiceEnabled;
+                    const newSettings = { ...settings, voiceEnabled: newValue };
+                    setSettings(newSettings);
+                    localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
+                    if (!newValue) stopSpeaking();
+                  }}
+                  className={`w-10 h-5 rounded-full transition-colors relative ${
+                    settings.voiceEnabled ? 'bg-[#07C160]' : 'bg-gray-300'
+                  }`}
+                >
+                  <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow ${
+                    settings.voiceEnabled ? 'left-5' : 'left-0.5'
+                  }`} />
+                </button>
+              </div>
 
-            {settings.voiceEnabled && (
-              <>
-                {/* 声音选择 */}
-                <div className="mb-3">
-                  <label className="block text-xs text-gray-500 mb-1">声音选择</label>
-                  <select
-                    value={settings.voiceURI}
-                    onChange={(e) => {
-                      const newValue = e.target.value;
-                      const newSettings = { ...settings, voiceURI: newValue };
-                      setSettings(newSettings);
-                      localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
-                    }}
-                    className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#07C160] focus:border-[#07C160] bg-white"
-                  >
-                    <option value="">默认声音</option>
-                    {availableVoices.map((voice) => (
-                      <option key={voice.voiceURI} value={voice.voiceURI}>
-                        {voice.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              {/* 语音输入开关 */}
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs text-gray-600">语音输入</span>
+                <button
+                  onClick={() => {
+                    const newValue = !settings.voiceInputEnabled;
+                    const newSettings = { ...settings, voiceInputEnabled: newValue };
+                    setSettings(newSettings);
+                    localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
+                  }}
+                  className={`w-10 h-5 rounded-full transition-colors relative ${
+                    settings.voiceInputEnabled ? 'bg-[#07C160]' : 'bg-gray-300'
+                  }`}
+                >
+                  <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow ${
+                    settings.voiceInputEnabled ? 'left-5' : 'left-0.5'
+                  }`} />
+                </button>
+              </div>
 
-                <div className="mb-3">
-                  <label className="block text-xs text-gray-500 mb-1">音量 {Math.round(settings.voiceVolume * 100)}%</label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.1"
-                    value={settings.voiceVolume}
-                    onChange={(e) => {
-                      const newValue = parseFloat(e.target.value);
-                      const newSettings = { ...settings, voiceVolume: newValue };
-                      setSettings(newSettings);
-                      localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
-                    }}
-                    className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                  />
-                </div>
-
-                <div className="mb-3">
-                  <label className="block text-xs text-gray-500 mb-1">语速 {settings.voiceRate.toFixed(1)}x</label>
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="2"
-                    step="0.1"
-                    value={settings.voiceRate}
-                    onChange={(e) => {
-                      const newValue = parseFloat(e.target.value);
-                      const newSettings = { ...settings, voiceRate: newValue };
-                      setSettings(newSettings);
-                      localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
-                    }}
-                    className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                  />
-                </div>
-              </>
-            )}
-
-            {/* 参与者图例 */}
-            <h4 className="text-sm font-medium text-gray-700 mb-3 mt-6">参与者</h4>
-            <div className="space-y-2">
-              {currentMeeting.participants.map((p, index) => {
-                const colors = PARTICIPANT_COLORS[index % PARTICIPANT_COLORS.length];
-                return (
-                  <div key={p.characterId} className="flex items-center gap-2">
-                    <div className={`w-3 h-3 rounded-full ${colors.bg} ${colors.border} border`} />
-                    <span className="text-xs text-gray-600 truncate">{p.character.name}</span>
+              {settings.voiceEnabled && (
+                <>
+                  {/* 声音选择 */}
+                  <div className="mb-3">
+                    <label className="block text-xs text-gray-500 mb-1">声音选择</label>
+                    <select
+                      value={settings.voiceURI}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        const newSettings = { ...settings, voiceURI: newValue };
+                        setSettings(newSettings);
+                        localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
+                      }}
+                      className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#07C160] focus:border-[#07C160] bg-white"
+                    >
+                      <option value="">默认声音</option>
+                      {availableVoices.map((voice) => (
+                        <option key={voice.voiceURI} value={voice.voiceURI}>
+                          {voice.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                );
-              })}
+
+                  <div className="mb-3">
+                    <label className="block text-xs text-gray-500 mb-1">音量 {Math.round(settings.voiceVolume * 100)}%</label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      value={settings.voiceVolume}
+                      onChange={(e) => {
+                        const newValue = parseFloat(e.target.value);
+                        const newSettings = { ...settings, voiceVolume: newValue };
+                        setSettings(newSettings);
+                        localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
+                      }}
+                      className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="block text-xs text-gray-500 mb-1">语速 {settings.voiceRate.toFixed(1)}x</label>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2"
+                      step="0.1"
+                      value={settings.voiceRate}
+                      onChange={(e) => {
+                        const newValue = parseFloat(e.target.value);
+                        const newSettings = { ...settings, voiceRate: newValue };
+                        setSettings(newSettings);
+                        localStorage.setItem('ai_app_settings', JSON.stringify(newSettings));
+                      }}
+                      className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* 参与者图例 */}
+              <h4 className="text-sm font-medium text-gray-700 mb-3 mt-6">参与者</h4>
+              <div className="space-y-2">
+                {currentMeeting.participants.map((p, index) => {
+                  const colors = PARTICIPANT_COLORS[index % PARTICIPANT_COLORS.length];
+                  return (
+                    <div key={p.characterId} className="flex items-center gap-2">
+                      <div className={`w-3 h-3 rounded-full ${colors.bg} ${colors.border} border`} />
+                      <span className="text-xs text-gray-600 truncate">{p.character.name}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
+
+          {/* 移动端遮罩层 */}
+          {showMobileSettings && (
+            <div 
+              className="md:hidden fixed inset-0 bg-black/30 z-20"
+              onClick={() => setShowMobileSettings(false)}
+            />
+          )}
         </div>
       )}
 
@@ -2041,6 +2121,122 @@ ${contextText || '（刚开始讨论）'}
                 className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
               >
                 关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 移动端菜单弹窗 */}
+      {showMobileMenu && currentMeeting && (
+        <div className="fixed inset-0 bg-black/50 z-50 md:hidden">
+          <div className="absolute right-0 top-0 bottom-0 w-64 bg-white shadow-xl">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="font-semibold">菜单</h3>
+              <button
+                onClick={() => setShowMobileMenu(false)}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 space-y-2">
+              <button
+                onClick={() => {
+                  handleNewTopic();
+                  setShowMobileMenu(false);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+              >
+                <Plus className="w-5 h-5" />
+                新议题
+              </button>
+
+              {!stormMode ? (
+                <button
+                  onClick={() => {
+                    const topic = prompt('请输入风暴模式的话题：', currentMeeting.topic || '自由讨论');
+                    if (topic) {
+                      const rounds = parseInt(prompt('请输入最大轮数（默认10轮）：', '10') || '10');
+                      setStormMaxRounds(rounds);
+                      startStormMode(topic);
+                    }
+                    setShowMobileMenu(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
+                >
+                  <Zap className="w-5 h-5" />
+                  风暴模式
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      toggleStormPause();
+                      setShowMobileMenu(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${
+                      stormPaused
+                        ? 'bg-green-500 text-white hover:bg-green-600'
+                        : 'bg-yellow-500 text-white hover:bg-yellow-600'
+                    }`}
+                  >
+                    {stormPaused ? <Play className="w-5 h-5" /> : <Square className="w-5 h-5" />}
+                    {stormPaused ? '继续风暴' : '暂停风暴'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      stopStormMode();
+                      setShowMobileMenu(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                  >
+                    <X className="w-5 h-5" />
+                    停止风暴
+                  </button>
+                </>
+              )}
+
+              <button
+                onClick={() => {
+                  const refreshedMeeting = meetingStorage.getMeeting(currentMeeting.id);
+                  if (refreshedMeeting) {
+                    setCurrentMeeting(refreshedMeeting);
+                  }
+                  setShowMeetingRecord(true);
+                  setShowMobileMenu(false);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+              >
+                <Download className="w-5 h-5" />
+                会议记录
+              </button>
+
+              <button
+                onClick={() => {
+                  handleClearAllMessages();
+                  setShowMobileMenu(false);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"
+              >
+                <Trash2 className="w-5 h-5" />
+                清空消息
+              </button>
+
+              <hr className="my-2" />
+
+              <button
+                onClick={() => {
+                  setCurrentMeeting(null);
+                  setShowMeetingList(true);
+                  stopSpeaking();
+                  if (stormMode) stopStormMode();
+                  setShowMobileMenu(false);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-gray-600 rounded-lg hover:bg-gray-100"
+              >
+                <ChevronLeft className="w-5 h-5" />
+                返回列表
               </button>
             </div>
           </div>

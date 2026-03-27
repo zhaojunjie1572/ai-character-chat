@@ -858,23 +858,14 @@ ${contextText || '（刚开始讨论）'}
     }, 2000);
   };
 
-  // 开始新议题（保留参与者，清空消息）
+  // 开始新议题（创建新会议，保留当前会议历史）
   const handleNewTopic = () => {
     if (!currentMeeting) return;
 
     if (currentMeeting.messages.length > 0) {
-      if (!confirm('确定要开始新议题吗？\n\n当前会议记录可在"会议记录"按钮中查看。')) {
+      if (!confirm('确定要开始新议题吗？\n\n当前会议将保存为历史，可在会议室列表中查看。')) {
         return;
       }
-    }
-
-    // 清空消息但保留参与者
-    meetingStorage.clearAllMessages(currentMeeting.id);
-
-    // 重置轮数
-    const updatedMeeting = meetingStorage.getMeeting(currentMeeting.id);
-    if (updatedMeeting) {
-      setCurrentMeeting(updatedMeeting);
     }
 
     // 停止风暴模式
@@ -882,10 +873,32 @@ ${contextText || '（刚开始讨论）'}
       stopStormMode();
     }
 
+    // 获取当前参与者
+    const participants = currentMeeting.participants;
+
+    // 创建新会议（保留参与者配置）
+    const newMeeting = meetingStorage.createMeeting(
+      `${currentMeeting.title} (${new Date().toLocaleDateString()})`,
+      currentMeeting.topic,
+      participants.map(p => ({
+        characterId: p.characterId,
+        character: p.character,
+        order: p.order,
+        isActive: p.isActive,
+        maxLength: p.maxLength,
+        canSeeOthers: p.canSeeOthers,
+      })),
+      currentMeeting.maxRounds,
+      currentMeeting.contextMode
+    );
+
+    // 切换到新会议
+    setCurrentMeeting(newMeeting);
+
     // 显示提示
     const toast = document.createElement('div');
     toast.className = 'fixed top-20 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 text-sm';
-    toast.textContent = '新议题已开始';
+    toast.textContent = '新议题已开始，原会议已保存';
     document.body.appendChild(toast);
     setTimeout(() => {
       document.body.removeChild(toast);

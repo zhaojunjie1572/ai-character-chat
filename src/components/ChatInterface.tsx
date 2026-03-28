@@ -7,6 +7,7 @@ import { apiService } from '@/lib/api';
 import { X, Mic, Volume2, VolumeX, MoreHorizontal, Smile, Plus, History, MessageSquare, Bookmark, Check } from 'lucide-react';
 import { memoStorage } from '@/lib/memoStorage';
 import { v4 as uuidv4 } from 'uuid';
+import { TtsConfig, loadTtsConfig, synthesizeSpeech } from '@/lib/ttsService';
 
 interface ChatInterfaceProps {
   character: Character;
@@ -63,6 +64,8 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [tempSettings, setTempSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [ttsConfig, setTtsConfig] = useState<TtsConfig>(loadTtsConfig());
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -227,15 +230,60 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
       .trim();
   };
 
-  const speakMessage = (text: string) => {
-    if (!window.speechSynthesis) return;
-    
-    window.speechSynthesis.cancel();
+  const speakMessage = async (text: string) => {
+    // 停止当前播放
+    stopSpeaking();
     
     // 清理文本
     const cleanedText = cleanTextForSpeech(text);
+    if (!cleanedText) return;
     
-    const utterance = new SpeechSynthesisUtterance(cleanedText);
+    // 如果使用 Edge TTS
+    if (ttsConfig.engine === 'edge-tts' && ttsConfig.edgeTtsUrl) {
+      try {
+        setIsSpeaking(true);
+        const blob = await synthesizeSpeech(cleanedText, ttsConfig, {
+          rate: settings.voiceRate,
+          pitch: settings.voicePitch
+        });
+        
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        
+        audio.volume = settings.voiceVolume;
+        
+        audio.onended = () => {
+          setIsSpeaking(false);
+          URL.revokeObjectURL(url);
+          audioRef.current = null;
+        };
+        
+        audio.onerror = () => {
+          console.error('Audio playback error');
+          setIsSpeaking(false);
+          URL.revokeObjectURL(url);
+          audioRef.current = null;
+          // 回退到浏览器 TTS
+          fallbackToBrowserTTS(cleanedText);
+        };
+        
+        await audio.play();
+      } catch (error) {
+        console.error('Edge TTS error:', error);
+        // 如果 Edge TTS 失败，回退到浏览器 TTS
+        fallbackToBrowserTTS(cleanedText);
+      }
+    } else {
+      // 使用浏览器原生 TTS
+      fallbackToBrowserTTS(cleanedText);
+    }
+  };
+
+  const fallbackToBrowserTTS = (text: string) => {
+    if (!window.speechSynthesis) return;
+    
+    const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'zh-CN';
     utterance.volume = settings.voiceVolume;
     utterance.rate = settings.voiceRate;
@@ -257,10 +305,19 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
   };
 
   const stopSpeaking = () => {
+    // 停止浏览器 TTS
     if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
-      setIsSpeaking(false);
     }
+    
+    // 停止 Edge TTS 音频
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+    
+    setIsSpeaking(false);
   };
 
   // 收藏消息到备忘录

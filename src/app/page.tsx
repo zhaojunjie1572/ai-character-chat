@@ -18,6 +18,7 @@ import { Avatar } from '@/components/Avatar';
 import { Character, CharacterGroup } from '@/types/character';
 import { gistSyncService } from '@/lib/gistSync';
 import { storage } from '@/lib/storage';
+import { TtsConfig, loadTtsConfig, saveTtsConfig, EDGE_TTS_VOICES } from '@/lib/ttsService';
 import { searchByPinyin } from '@/lib/pinyin';
 
 interface AppSettings {
@@ -87,6 +88,10 @@ export default function Home() {
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [memos, setMemos] = useState<MemoItem[]>([]);
   const [filteredMemos, setFilteredMemos] = useState<MemoItem[]>([]);
+
+  // TTS 设置相关状态
+  const [showTtsSettings, setShowTtsSettings] = useState(false);
+  const [ttsConfig, setTtsConfig] = useState<TtsConfig>(loadTtsConfig());
 
   useEffect(() => {
     const savedSettings = localStorage.getItem('ai_app_settings');
@@ -938,6 +943,18 @@ export default function Home() {
                 </div>
               </div>
               <div className="bg-white">
+                <div 
+                  onClick={() => setShowTtsSettings(true)}
+                  className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 active:bg-gray-100 cursor-pointer"
+                >
+                  <div className="w-7 h-7 bg-[#07C160] rounded-lg flex items-center justify-center shrink-0">
+                    <Volume2 className="w-4 h-4 text-white" />
+                  </div>
+                  <span className="text-base text-gray-900">语音设置</span>
+                  <span className="ml-auto text-xs text-gray-400">Edge TTS</span>
+                </div>
+              </div>
+              <div className="bg-white">
                 <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100">
                   <div className="w-7 h-7 shrink-0" />
                   <span className="text-base text-gray-900">扫一扫</span>
@@ -1698,6 +1715,130 @@ export default function Home() {
               >
                 <Edit className="w-5 h-5 text-[#007AFF]" />
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TTS 设置弹窗 */}
+      {showTtsSettings && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl w-full max-w-md max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">语音设置</h3>
+              <button
+                onClick={() => setShowTtsSettings(false)}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            
+            <div className="p-4 space-y-6">
+              {/* TTS 引擎选择 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">TTS 引擎</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setTtsConfig({ ...ttsConfig, engine: 'browser' })}
+                    className={`p-3 rounded-xl border-2 transition-all ${
+                      ttsConfig.engine === 'browser'
+                        ? 'border-[#07C160] bg-[#07C160]/10'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="font-medium text-gray-900">浏览器</div>
+                    <div className="text-xs text-gray-500">系统默认</div>
+                  </button>
+                  <button
+                    onClick={() => setTtsConfig({ ...ttsConfig, engine: 'edge-tts' })}
+                    className={`p-3 rounded-xl border-2 transition-all ${
+                      ttsConfig.engine === 'edge-tts'
+                        ? 'border-[#07C160] bg-[#07C160]/10'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="font-medium text-gray-900">Edge TTS</div>
+                    <div className="text-xs text-gray-500">微软语音</div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Edge TTS 配置 */}
+              {ttsConfig.engine === 'edge-tts' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Edge TTS 代理 URL
+                    </label>
+                    <input
+                      type="text"
+                      value={ttsConfig.edgeTtsUrl || ''}
+                      onChange={(e) => setTtsConfig({ ...ttsConfig, edgeTtsUrl: e.target.value })}
+                      placeholder="https://yytts.zeabur.app/tts"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#07C160]"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      使用您在 Zeabur 部署的 Edge TTS 服务地址
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">声音选择</label>
+                    <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-xl p-2">
+                      {EDGE_TTS_VOICES.map((voice) => (
+                        <label
+                          key={voice.id}
+                          className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${
+                            ttsConfig.edgeTtsVoice === voice.id
+                              ? voice.gender === 'female' ? 'bg-pink-50' : 'bg-blue-50'
+                              : 'hover:bg-gray-50'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="edge-voice"
+                            value={voice.id}
+                            checked={ttsConfig.edgeTtsVoice === voice.id}
+                            onChange={() => setTtsConfig({ ...ttsConfig, edgeTtsVoice: voice.id })}
+                            className={`w-4 h-4 ${voice.gender === 'female' ? 'text-pink-500' : 'text-blue-500'}`}
+                          />
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-gray-900">{voice.name}</div>
+                            <div className="text-xs text-gray-500">{voice.desc}</div>
+                          </div>
+                          <span className={`text-xs px-2 py-1 rounded-full ${
+                            voice.gender === 'female' 
+                              ? 'bg-pink-100 text-pink-700'
+                              : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {voice.gender === 'female' ? '女声' : '男声'}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* 保存按钮 */}
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => setShowTtsSettings(false)}
+                  className="flex-1 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={() => {
+                    saveTtsConfig(ttsConfig);
+                    setShowTtsSettings(false);
+                  }}
+                  className="flex-1 py-2 bg-[#07C160] text-white rounded-lg hover:bg-[#06AD56]"
+                >
+                  保存
+                </button>
+              </div>
             </div>
           </div>
         </div>

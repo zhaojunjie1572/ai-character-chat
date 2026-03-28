@@ -7,7 +7,7 @@ import { apiService } from '@/lib/api';
 import { X, Mic, Volume2, VolumeX, MoreHorizontal, Smile, Plus, History, MessageSquare, Bookmark, Check } from 'lucide-react';
 import { memoStorage } from '@/lib/memoStorage';
 import { v4 as uuidv4 } from 'uuid';
-import { TtsConfig, loadTtsConfig, synthesizeSpeech } from '@/lib/ttsService';
+import { TtsConfig, loadTtsConfig, synthesizeSpeech, speakLongTextEdgeTTS, speakLongTextBrowser, SpeechController } from '@/lib/ttsService';
 
 interface ChatInterfaceProps {
   character: Character;
@@ -65,7 +65,8 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
   const [tempSettings, setTempSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [ttsConfig, setTtsConfig] = useState<TtsConfig>(loadTtsConfig());
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const speechControllerRef = useRef<SpeechController | null>(null);
+  const [speechProgress, setSpeechProgress] = useState<{ current: number; total: number } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -233,45 +234,42 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
   const speakMessage = async (text: string) => {
     // 停止当前播放
     stopSpeaking();
-    
+
     // 清理文本
     const cleanedText = cleanTextForSpeech(text);
     if (!cleanedText) return;
-    
+
     // 如果使用 Edge TTS
     if (ttsConfig.engine === 'edge-tts' && ttsConfig.edgeTtsUrl) {
       try {
         setIsSpeaking(true);
-        const blob = await synthesizeSpeech(cleanedText, ttsConfig, {
+        setSpeechProgress({ current: 1, total: 1 }); // 初始状态
+
+        const controller = await speakLongTextEdgeTTS(cleanedText, ttsConfig, {
           rate: settings.voiceRate,
-          pitch: settings.voicePitch
+          pitch: settings.voicePitch,
+          volume: settings.voiceVolume,
+          onProgress: (current, total) => {
+            setSpeechProgress({ current, total });
+          },
+          onEnded: () => {
+            setIsSpeaking(false);
+            setSpeechProgress(null);
+            speechControllerRef.current = null;
+          },
+          onError: (error) => {
+            console.error('Edge TTS error:', error);
+            // 出错时回退到浏览器 TTS
+            speechControllerRef.current = null;
+            fallbackToBrowserTTS(cleanedText);
+          }
         });
-        
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        audioRef.current = audio;
-        
-        audio.volume = settings.voiceVolume;
-        
-        audio.onended = () => {
-          setIsSpeaking(false);
-          URL.revokeObjectURL(url);
-          audioRef.current = null;
-        };
-        
-        audio.onerror = () => {
-          console.error('Audio playback error');
-          setIsSpeaking(false);
-          URL.revokeObjectURL(url);
-          audioRef.current = null;
-          // 回退到浏览器 TTS
-          fallbackToBrowserTTS(cleanedText);
-        };
-        
-        await audio.play();
+
+        speechControllerRef.current = controller;
+        controller.play();
       } catch (error) {
-        console.error('Edge TTS error:', error);
-        // 如果 Edge TTS 失败，回退到浏览器 TTS
+        console.error('Edge TTS initialization error:', error);
+        // 如果 Edge TTS 初始化失败，回退到浏览器 TTS
         fallbackToBrowserTTS(cleanedText);
       }
     } else {
@@ -281,43 +279,59 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
   };
 
   const fallbackToBrowserTTS = (text: string) => {
-    if (!window.speechSynthesis) return;
-    
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'zh-CN';
-    utterance.volume = settings.voiceVolume;
-    utterance.rate = settings.voiceRate;
-    utterance.pitch = settings.voicePitch;
-    
-    if (settings.voiceURI) {
-      const voices = window.speechSynthesis.getVoices();
-      const selectedVoice = voices.find(v => v.voiceURI === settings.voiceURI);
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
-      }
+    if (!window.speechSynthesis) {
+      setIsSpeaking(false);
+      return;
     }
-    
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    
-    window.speechSynthesis.speak(utterance);
+
+    try {
+      setIsSpeaking(true);
+      setSpeechProgress({ current: 1, total: 1 });
+
+      const controller = speakLongTextBrowser(text, {
+        rate: settings.voiceRate,
+        pitch: settings.voicePitch,
+        volume: settings.voiceVolume,
+        voiceURI: settings.voiceURI,
+        onProgress: (current, total) => {
+          setSpeechProgress({ current, total });
+        },
+        onEnded: () => {
+          setIsSpeaking(false);
+          setSpeechProgress(null);
+          speechControllerRef.current = null;
+        },
+        onError: (error) => {
+          console.error('Browser TTS error:', error);
+          setIsSpeaking(false);
+          setSpeechProgress(null);
+          speechControllerRef.current = null;
+        }
+      });
+
+      speechControllerRef.current = controller;
+      controller.play();
+    } catch (error) {
+      console.error('Browser TTS initialization error:', error);
+      setIsSpeaking(false);
+      setSpeechProgress(null);
+    }
   };
 
   const stopSpeaking = () => {
-    // 停止浏览器 TTS
+    // 停止长文本朗读控制器
+    if (speechControllerRef.current) {
+      speechControllerRef.current.stop();
+      speechControllerRef.current = null;
+    }
+
+    // 备用：停止浏览器 TTS
     if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
-    
-    // 停止 Edge TTS 音频
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      audioRef.current = null;
-    }
-    
+
     setIsSpeaking(false);
+    setSpeechProgress(null);
   };
 
   // 收藏消息到备忘录
@@ -794,10 +808,15 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
               {isSpeaking && (
                 <button
                   onClick={stopSpeaking}
-                  className="p-2 hover:bg-gray-200 rounded-full transition-colors shrink-0"
+                  className="p-2 hover:bg-gray-200 rounded-full transition-colors shrink-0 flex items-center gap-1"
                   title="停止朗读"
                 >
                   <VolumeX className="w-6 h-6 text-red-500" />
+                  {speechProgress && speechProgress.total > 1 && (
+                    <span className="text-xs text-red-500">
+                      {speechProgress.current}/{speechProgress.total}
+                    </span>
+                  )}
                 </button>
               )}
             </div>

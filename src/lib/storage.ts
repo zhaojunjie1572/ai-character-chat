@@ -303,6 +303,40 @@ export const storage = {
     });
   },
 
+  // ========== 当前历史会话ID（用于同步）==========
+
+  // 获取所有角色的当前历史会话ID
+  getAllCurrentHistoryIds: (): Record<string, string> => {
+    const ids: Record<string, string> = {};
+    if (typeof window === 'undefined') return ids;
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(`${CURRENT_SESSION_KEY}_`)) {
+        try {
+          const data = localStorage.getItem(key);
+          if (data) {
+            const characterId = key.replace(`${CURRENT_SESSION_KEY}_`, '');
+            ids[characterId] = data;
+          }
+        } catch (e) {
+          console.error('解析当前历史会话ID失败:', key, e);
+        }
+      }
+    }
+
+    return ids;
+  },
+
+  // 保存所有角色的当前历史会话ID
+  saveAllCurrentHistoryIds: (ids: Record<string, string>): void => {
+    Object.entries(ids).forEach(([characterId, historyId]) => {
+      if (historyId) {
+        safeStorage.setItem(`${CURRENT_SESSION_KEY}_${characterId}`, historyId);
+      }
+    });
+  },
+
   // ========== 角色分组 ==========
 
   // 获取所有分组

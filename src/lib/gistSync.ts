@@ -11,6 +11,7 @@ export interface SyncData {
   characters: Character[];
   chatSessions: Record<string, ChatSession>;
   characterHistories: Record<string, ChatHistory[]>;
+  currentHistoryIds: Record<string, string>; // 当前历史会话ID
   characterGroups: CharacterGroup[];
   meetings: MeetingSession[];
   memos: MemoItem[];
@@ -187,6 +188,7 @@ export class GistSyncService {
     characters: Character[],
     chatSessions: Record<string, ChatSession>,
     characterHistories: Record<string, ChatHistory[]>,
+    currentHistoryIds: Record<string, string>,
     characterGroups: CharacterGroup[],
     meetings: MeetingSession[],
     memos: MemoItem[],
@@ -196,6 +198,7 @@ export class GistSyncService {
       characters,
       chatSessions,
       characterHistories,
+      currentHistoryIds,
       characterGroups,
       meetings,
       memos,
@@ -213,6 +216,7 @@ export class GistSyncService {
     characters: Character[],
     chatSessions: Record<string, ChatSession>,
     characterHistories: Record<string, ChatHistory[]>,
+    currentHistoryIds: Record<string, string>,
     characterGroups: CharacterGroup[],
     meetings: MeetingSession[],
     memos: MemoItem[],
@@ -222,6 +226,7 @@ export class GistSyncService {
       characters,
       chatSessions,
       characterHistories,
+      currentHistoryIds,
       characterGroups,
       meetings,
       memos,

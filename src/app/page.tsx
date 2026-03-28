@@ -167,10 +167,11 @@ export default function Home() {
       gistSyncService.setConfig(currentSettings.gistToken, currentSettings.gistId);
       const chatSessions = getAllChatSessions();
       const characterHistories = getAllCharacterHistories();
+      const currentHistoryIds = storage.getAllCurrentHistoryIds();
       const characterGroups = storage.getCharacterGroups();
       const meetings = meetingStorage.getMeetings();
       const memos = memoStorage.getMemos();
-      const data = gistSyncService.prepareSyncData(characters, chatSessions, characterHistories, characterGroups, meetings, memos, currentSettings);
+      const data = gistSyncService.prepareSyncData(characters, chatSessions, characterHistories, currentHistoryIds, characterGroups, meetings, memos, currentSettings);
 
       let gistId: string | null = currentSettings.gistId;
       if (!gistId) {
@@ -218,6 +219,7 @@ export default function Home() {
         const hasSettings = data.settings && Object.keys(data.settings).length > 0;
         const hasChatSessions = data.chatSessions && Object.keys(data.chatSessions).length > 0;
         const hasHistories = data.characterHistories && Object.keys(data.characterHistories).length > 0;
+        const hasCurrentHistoryIds = data.currentHistoryIds && Object.keys(data.currentHistoryIds).length > 0;
         const hasMeetings = data.meetings && data.meetings.length > 0;
         const hasMemos = data.memos && data.memos.length > 0;
 
@@ -253,6 +255,11 @@ export default function Home() {
           // 恢复历史记录（重要！）
           if (hasHistories && data.characterHistories) {
             storage.saveAllCharacterHistories(data.characterHistories);
+          }
+
+          // 恢复当前历史会话ID（关键！让聊天记录回到正确位置）
+          if (hasCurrentHistoryIds && data.currentHistoryIds) {
+            storage.saveAllCurrentHistoryIds(data.currentHistoryIds);
           }
 
           // 恢复当前会话
@@ -301,10 +308,11 @@ export default function Home() {
   const handleExport = () => {
     const chatSessions = getAllChatSessions();
     const characterHistories = getAllCharacterHistories();
+    const currentHistoryIds = storage.getAllCurrentHistoryIds();
     const characterGroups = storage.getCharacterGroups();
     const meetings = meetingStorage.getMeetings();
     const memos = memoStorage.getMemos();
-    const data = gistSyncService.exportFullData(characters, chatSessions, characterHistories, characterGroups, meetings, memos, apiSettings);
+    const data = gistSyncService.exportFullData(characters, chatSessions, characterHistories, currentHistoryIds, characterGroups, meetings, memos, apiSettings);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -333,6 +341,8 @@ export default function Home() {
       if (data && (data.characters || data.chatSessions || data.settings || data.characterGroups || data.meetings || data.memos)) {
         const hasCharacters = data.characters && data.characters.length > 0;
         const hasChatSessions = data.chatSessions && Object.keys(data.chatSessions).length > 0;
+        const hasHistories = data.characterHistories && Object.keys(data.characterHistories).length > 0;
+        const hasCurrentHistoryIds = data.currentHistoryIds && Object.keys(data.currentHistoryIds).length > 0;
         const hasSettings = data.settings && Object.keys(data.settings).length > 0;
         const hasGroups = data.characterGroups && data.characterGroups.length > 0;
         const hasMeetings = data.meetings && data.meetings.length > 0;
@@ -344,7 +354,8 @@ export default function Home() {
         if (hasGroups) parts.push(`${data.characterGroups.length} 个分组`);
         if (hasMeetings) parts.push(`${data.meetings.length} 个会议`);
         if (hasMemos) parts.push(`${data.memos.length} 条备忘录`);
-        if (hasChatSessions) parts.push('聊天记录');
+        if (hasHistories) parts.push('历史记录');
+        if (hasChatSessions) parts.push('当前会话');
         if (hasSettings) parts.push('设置');
         if (parts.length > 0) {
           message = `找到 ${parts.join('、')}，是否导入？`;
@@ -363,6 +374,16 @@ export default function Home() {
               // 直接使用 storage.saveCharacter 保留原始 ID
               storage.saveCharacter(c);
             });
+          }
+
+          // 恢复历史记录
+          if (hasHistories && data.characterHistories) {
+            storage.saveAllCharacterHistories(data.characterHistories);
+          }
+
+          // 恢复当前历史会话ID（关键！让聊天记录回到正确位置）
+          if (hasCurrentHistoryIds && data.currentHistoryIds) {
+            storage.saveAllCurrentHistoryIds(data.currentHistoryIds);
           }
 
           if (hasChatSessions && data.chatSessions) {

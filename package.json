@@ -7,14 +7,17 @@
     "dev:https": "next dev -H 0.0.0.0 --experimental-https",
     "build": "next build",
     "start": "npx serve@latest dist",
-    "lint": "next lint"
+    "lint": "next lint",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\""
   },
   "dependencies": {
+    "lucide-react": "^0.400.0",
     "next": "14.2.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "lucide-react": "^0.400.0",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@types/node": "^20.14.9",

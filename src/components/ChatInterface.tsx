@@ -108,9 +108,21 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
       const savedSettings = localStorage.getItem('ai_app_settings');
       if (savedSettings) {
         const parsed = JSON.parse(savedSettings);
-        setSettings({ ...DEFAULT_SETTINGS, ...parsed });
-        setTempSettings({ ...DEFAULT_SETTINGS, ...parsed });
-        apiService.setConfig(parsed.apiKey || '', parsed.apiBaseURL, parsed.apiModel);
+        // 确保有默认值
+        const mergedSettings = {
+          ...DEFAULT_SETTINGS,
+          ...parsed,
+          // 如果保存的值为空，使用默认值
+          apiBaseURL: parsed.apiBaseURL || DEFAULT_SETTINGS.apiBaseURL,
+          apiModel: parsed.apiModel || DEFAULT_SETTINGS.apiModel,
+        };
+        setSettings(mergedSettings);
+        setTempSettings(mergedSettings);
+        apiService.setConfig(
+          mergedSettings.apiKey,
+          mergedSettings.apiBaseURL,
+          mergedSettings.apiModel
+        );
       }
     } catch (e) {
       console.error('加载设置失败:', e);

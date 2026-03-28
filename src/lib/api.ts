@@ -31,8 +31,27 @@ export class APIService {
   }
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
+    // 检查 API Key
+    if (!this.apiKey || this.apiKey.trim() === '') {
+      return {
+        content: '',
+        error: 'API 密钥未设置，请先配置 API 密钥',
+      };
+    }
+
+    // 检查 baseURL
+    if (!this.baseURL || this.baseURL.trim() === '') {
+      return {
+        content: '',
+        error: 'API 基础 URL 未设置',
+      };
+    }
+
+    // 确保 baseURL 不以斜杠结尾
+    const baseURL = this.baseURL.replace(/\/$/, '');
+
     try {
-      const response = await fetch(`${this.baseURL}/chat/completions`, {
+      const response = await fetch(`${baseURL}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -48,25 +67,64 @@ export class APIService {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error?.message || `HTTP error! status: ${response.status}`);
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        
+        // 尝试解析错误响应
+        try {
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const error = await response.json();
+            errorMessage = error.error?.message || error.message || errorMessage;
+          } else {
+            // 如果不是 JSON，尝试获取文本
+            const text = await response.text();
+            if (text) {
+              errorMessage = `${errorMessage} - ${text.substring(0, 200)}`;
+            }
+          }
+        } catch (parseError) {
+          // 解析错误时，使用状态码
+          errorMessage = `请求失败 (${response.status}): ${response.statusText}`;
+        }
+
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
+      
+      // 检查响应格式
+      if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
+        throw new Error('API 返回格式错误：缺少 choices 字段');
+      }
+
       return {
         content: data.choices[0]?.message?.content || '',
       };
     } catch (error) {
+      // 网络错误处理
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        return {
+          content: '',
+          error: '网络连接失败，请检查网络或 API 地址是否正确',
+        };
+      }
+
       return {
         content: '',
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        error: error instanceof Error ? error.message : '未知错误',
       };
     }
   }
 
   // 流式聊天（用于实时显示回复）
   async *chatStream(request: ChatRequest): AsyncGenerator<string, void, unknown> {
-    const response = await fetch(`${this.baseURL}/chat/completions`, {
+    if (!this.apiKey || this.apiKey.trim() === '') {
+      throw new Error('API 密钥未设置');
+    }
+
+    const baseURL = this.baseURL.replace(/\/$/, '');
+
+    const response = await fetch(`${baseURL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -82,7 +140,22 @@ export class APIService {
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      let errorMessage = `HTTP error! status: ${response.status}`;
+      try {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const error = await response.json();
+          errorMessage = error.error?.message || error.message || errorMessage;
+        } else {
+          const text = await response.text();
+          if (text) {
+            errorMessage = `${errorMessage} - ${text.substring(0, 200)}`;
+          }
+        }
+      } catch (e) {
+        // 忽略解析错误
+      }
+      throw new Error(errorMessage);
     }
 
     const reader = response.body?.getReader();

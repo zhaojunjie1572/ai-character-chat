@@ -249,6 +249,7 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
           rate: settings.voiceRate,
           pitch: settings.voicePitch,
           volume: settings.voiceVolume,
+          voiceURI: settings.voiceURI,
           onProgress: (current, total) => {
             setSpeechProgress({ current, total });
           },
@@ -261,7 +262,12 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
             console.error('Edge TTS error:', error);
             // 出错时回退到浏览器 TTS
             speechControllerRef.current = null;
+            setSpeechProgress(null);
             fallbackToBrowserTTS(cleanedText);
+          },
+          onFallback: () => {
+            // Edge TTS 自动回退到浏览器 TTS 时触发
+            console.log('Edge TTS 已自动回退到浏览器 TTS');
           }
         });
 

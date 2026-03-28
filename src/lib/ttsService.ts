@@ -186,7 +186,7 @@ export interface SpeechController {
 }
 
 /**
- * 朗读长文本（Edge TTS 版本）
+ * 朗读长文本（Edge TTS 版本，失败时自动回退到浏览器 TTS）
  */
 export async function speakLongTextEdgeTTS(
   text: string,
@@ -195,9 +195,11 @@ export async function speakLongTextEdgeTTS(
     rate?: number;
     pitch?: number;
     volume?: number;
+    voiceURI?: string;
     onProgress?: (current: number, total: number) => void;
     onEnded?: () => void;
     onError?: (error: Error) => void;
+    onFallback?: () => void; // 当回退到浏览器 TTS 时触发
   } = {}
 ): Promise<SpeechController> {
   if (!config.edgeTtsUrl) {
@@ -205,26 +207,72 @@ export async function speakLongTextEdgeTTS(
   }
 
   const segments = splitTextForSpeech(text);
-  const { rate = 1, pitch = 1, volume = 1 } = options;
+  const { rate = 1, pitch = 1, volume = 1, voiceURI } = options;
 
   let currentIndex = 0;
   let isPlaying = false;
   let isPaused = false;
   let currentAudio: HTMLAudioElement | null = null;
   let audioUrls: string[] = [];
+  let hasFallbackToBrowser = false;
+  let browserController: SpeechController | null = null;
 
   // 预合成所有音频段
   const preloadAudios = async () => {
     try {
       for (let i = 0; i < segments.length; i++) {
         if (!isPlaying && !isPaused) return; // 如果被停止则取消预加载
+        if (hasFallbackToBrowser) return; // 如果已回退则取消预加载
 
         const blob = await synthesizeSpeech(segments[i], config, { rate, pitch });
         const url = URL.createObjectURL(blob);
         audioUrls.push(url);
       }
     } catch (error) {
-      options.onError?.(error instanceof Error ? error : new Error('预加载音频失败'));
+      console.warn('Edge TTS 预加载失败，准备回退到浏览器 TTS:', error);
+      // 不回退，让播放时处理
+    }
+  };
+
+  // 回退到浏览器 TTS
+  const fallbackToBrowser = () => {
+    if (hasFallbackToBrowser) return;
+    hasFallbackToBrowser = true;
+    
+    console.log('Edge TTS 失败，自动回退到浏览器 TTS');
+    options.onFallback?.();
+    
+    // 清理 Edge TTS 资源
+    audioUrls.forEach(url => URL.revokeObjectURL(url));
+    audioUrls = [];
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio = null;
+    }
+    
+    // 创建浏览器 TTS 控制器，从当前段落继续
+    const remainingText = segments.slice(currentIndex).join('');
+    if (remainingText) {
+      browserController = speakLongTextBrowser(remainingText, {
+        rate,
+        pitch,
+        volume,
+        voiceURI,
+        onProgress: (current, total) => {
+          // 转换进度为整体进度
+          const overallCurrent = currentIndex + current;
+          const overallTotal = segments.length;
+          options.onProgress?.(overallCurrent, overallTotal);
+        },
+        onEnded: () => {
+          isPlaying = false;
+          options.onEnded?.();
+        },
+        onError: (error) => {
+          options.onError?.(error);
+        }
+      });
+      browserController.play();
     }
   };
 
@@ -235,13 +283,24 @@ export async function speakLongTextEdgeTTS(
       return;
     }
 
+    // 如果已经回退到浏览器 TTS，不再继续 Edge TTS
+    if (hasFallbackToBrowser) {
+      return;
+    }
+
     options.onProgress?.(currentIndex + 1, segments.length);
 
     try {
       // 如果该段音频还没预加载，先合成
       if (!audioUrls[currentIndex]) {
-        const blob = await synthesizeSpeech(segments[currentIndex], config, { rate, pitch });
-        audioUrls[currentIndex] = URL.createObjectURL(blob);
+        try {
+          const blob = await synthesizeSpeech(segments[currentIndex], config, { rate, pitch });
+          audioUrls[currentIndex] = URL.createObjectURL(blob);
+        } catch (error) {
+          console.warn(`Edge TTS 合成第 ${currentIndex + 1} 段失败，回退到浏览器 TTS:`, error);
+          fallbackToBrowser();
+          return;
+        }
       }
 
       const audio = new Audio(audioUrls[currentIndex]);
@@ -250,28 +309,33 @@ export async function speakLongTextEdgeTTS(
 
       audio.onended = () => {
         currentIndex++;
-        if (isPlaying && !isPaused) {
+        if (isPlaying && !isPaused && !hasFallbackToBrowser) {
           playNext();
         }
       };
 
       audio.onerror = () => {
-        options.onError?.(new Error(`音频播放失败: 第 ${currentIndex + 1} 段`));
-        currentIndex++;
-        if (isPlaying && !isPaused) {
-          playNext();
-        }
+        console.warn(`Edge TTS 播放第 ${currentIndex + 1} 段失败，回退到浏览器 TTS`);
+        fallbackToBrowser();
       };
 
       await audio.play();
     } catch (error) {
-      options.onError?.(error instanceof Error ? error : new Error('播放音频失败'));
-      isPlaying = false;
+      console.warn('Edge TTS 播放失败，回退到浏览器 TTS:', error);
+      fallbackToBrowser();
     }
   };
 
   const controller: SpeechController = {
     play: () => {
+      // 如果已经回退到浏览器 TTS
+      if (hasFallbackToBrowser && browserController) {
+        browserController.play();
+        isPaused = false;
+        isPlaying = true;
+        return;
+      }
+      
       if (isPaused && currentAudio) {
         currentAudio.play();
         isPaused = false;
@@ -286,14 +350,27 @@ export async function speakLongTextEdgeTTS(
     },
     pause: () => {
       isPaused = true;
+      // 如果已经回退到浏览器 TTS
+      if (hasFallbackToBrowser && browserController) {
+        browserController.pause();
+        return;
+      }
       currentAudio?.pause();
     },
     stop: () => {
       isPlaying = false;
       isPaused = false;
+      
+      // 如果已经回退到浏览器 TTS
+      if (hasFallbackToBrowser && browserController) {
+        browserController.stop();
+        browserController = null;
+      }
+      
       currentAudio?.pause();
       currentAudio = null;
       currentIndex = 0;
+      hasFallbackToBrowser = false;
       // 清理所有音频 URL
       audioUrls.forEach(url => URL.revokeObjectURL(url));
       audioUrls = [];

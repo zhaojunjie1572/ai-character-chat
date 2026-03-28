@@ -3,6 +3,7 @@ export type TtsEngine = 'browser' | 'edge-tts';
 
 export interface TtsConfig {
   engine: TtsEngine;
+  useEdgeTTS: boolean; // Edge TTS 开关
   edgeTtsUrl?: string;
   edgeTtsVoice?: string;
 }
@@ -30,7 +31,8 @@ const MAX_TEXT_LENGTH = 1800;
 
 export function getDefaultConfig(): TtsConfig {
   return {
-    engine: 'browser'
+    engine: 'browser',
+    useEdgeTTS: false, // 默认关闭 Edge TTS，使用系统默认语音
   };
 }
 
@@ -186,7 +188,7 @@ export interface SpeechController {
 }
 
 /**
- * 朗读长文本（Edge TTS 版本，失败时自动回退到浏览器 TTS）
+ * 朗读长文本（支持 Edge TTS 开关，关闭时使用浏览器默认语音）
  */
 export async function speakLongTextEdgeTTS(
   text: string,
@@ -202,6 +204,12 @@ export async function speakLongTextEdgeTTS(
     onFallback?: () => void; // 当回退到浏览器 TTS 时触发
   } = {}
 ): Promise<SpeechController> {
+  // 如果关闭 Edge TTS 开关，直接使用浏览器 TTS
+  if (!config.useEdgeTTS) {
+    console.log('Edge TTS 已关闭，使用浏览器默认语音');
+    return speakLongTextBrowser(text, options);
+  }
+
   if (!config.edgeTtsUrl) {
     throw new Error('Edge TTS URL 未配置');
   }

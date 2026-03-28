@@ -1735,37 +1735,30 @@ export default function Home() {
             </div>
             
             <div className="p-4 space-y-6">
-              {/* TTS 引擎选择 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">TTS 引擎</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => setTtsConfig({ ...ttsConfig, engine: 'browser' })}
-                    className={`p-3 rounded-xl border-2 transition-all ${
-                      ttsConfig.engine === 'browser'
-                        ? 'border-[#07C160] bg-[#07C160]/10'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="font-medium text-gray-900">浏览器</div>
-                    <div className="text-xs text-gray-500">系统默认</div>
-                  </button>
-                  <button
-                    onClick={() => setTtsConfig({ ...ttsConfig, engine: 'edge-tts' })}
-                    className={`p-3 rounded-xl border-2 transition-all ${
-                      ttsConfig.engine === 'edge-tts'
-                        ? 'border-[#07C160] bg-[#07C160]/10'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="font-medium text-gray-900">Edge TTS</div>
-                    <div className="text-xs text-gray-500">微软语音</div>
-                  </button>
+              {/* Edge TTS 开关 */}
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                <div>
+                  <div className="font-medium text-gray-900">使用 Edge TTS</div>
+                  <div className="text-xs text-gray-500">
+                    {ttsConfig.useEdgeTTS ? '使用微软 Edge 语音' : '使用系统默认语音'}
+                  </div>
                 </div>
+                <button
+                  onClick={() => setTtsConfig({ ...ttsConfig, useEdgeTTS: !ttsConfig.useEdgeTTS })}
+                  className={`w-12 h-7 rounded-full transition-colors relative ${
+                    ttsConfig.useEdgeTTS ? 'bg-[#07C160]' : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform ${
+                      ttsConfig.useEdgeTTS ? 'left-6' : 'left-1'
+                    }`}
+                  />
+                </button>
               </div>
 
               {/* Edge TTS 配置 */}
-              {ttsConfig.engine === 'edge-tts' && (
+              {ttsConfig.useEdgeTTS && (
                 <>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">

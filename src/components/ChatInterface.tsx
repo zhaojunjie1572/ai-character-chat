@@ -239,8 +239,8 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
     const cleanedText = cleanTextForSpeech(text);
     if (!cleanedText) return;
 
-    // 如果使用 Edge TTS
-    if (ttsConfig.engine === 'edge-tts' && ttsConfig.edgeTtsUrl) {
+    // 根据 useEdgeTTS 开关决定使用哪种 TTS
+    if (ttsConfig.useEdgeTTS && ttsConfig.edgeTtsUrl) {
       try {
         setIsSpeaking(true);
         setSpeechProgress({ current: 1, total: 1 }); // 初始状态
@@ -279,7 +279,8 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
         fallbackToBrowserTTS(cleanedText);
       }
     } else {
-      // 使用浏览器原生 TTS
+      // 使用浏览器原生 TTS（系统默认语音）
+      console.log('Edge TTS 已关闭，使用浏览器默认语音');
       fallbackToBrowserTTS(cleanedText);
     }
   };

@@ -467,7 +467,7 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
       const response = await apiService.chat({
         messages: chatMessages,
         temperature: 0.7,
-        max_tokens: 2000,
+        max_tokens: 4000,
       });
 
       if (response.error) {

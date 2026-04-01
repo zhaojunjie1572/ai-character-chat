@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Character, Message, ChatHistory } from '@/types/character';
 import { storage } from '@/lib/storage';
-import { apiService } from '@/lib/api';
+import { apiService, ApiProvider } from '@/lib/api';
 import { X, Mic, Volume2, VolumeX, MoreHorizontal, Smile, Plus, History, MessageSquare, Bookmark, Check } from 'lucide-react';
 import { memoStorage } from '@/lib/memoStorage';
 import { v4 as uuidv4 } from 'uuid';
@@ -18,6 +18,7 @@ interface AppSettings {
   apiKey: string;
   apiBaseURL: string;
   apiModel: string;
+  apiProvider: ApiProvider;
   voiceEnabled: boolean;
   voiceInputEnabled: boolean;
   backgroundImage: string;
@@ -31,6 +32,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   apiKey: '',
   apiBaseURL: 'https://api.openai.com/v1',
   apiModel: 'gpt-3.5-turbo',
+  apiProvider: 'openai',
   voiceEnabled: false,
   voiceInputEnabled: false,
   backgroundImage: '',
@@ -118,11 +120,12 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
         };
         setSettings(mergedSettings);
         setTempSettings(mergedSettings);
-        apiService.setConfig(
-          mergedSettings.apiKey,
-          mergedSettings.apiBaseURL,
-          mergedSettings.apiModel
-        );
+        apiService.setConfig({
+          apiKey: mergedSettings.apiKey,
+          baseURL: mergedSettings.apiBaseURL,
+          model: mergedSettings.apiModel,
+          provider: mergedSettings.apiProvider,
+        });
       }
     } catch (e) {
       console.error('加载设置失败:', e);
@@ -448,7 +451,12 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
     setIsLoading(true);
 
     try {
-      apiService.setConfig(settings.apiKey, settings.apiBaseURL, settings.apiModel);
+      apiService.setConfig({
+        apiKey: settings.apiKey,
+        baseURL: settings.apiBaseURL,
+        model: settings.apiModel,
+        provider: settings.apiProvider,
+      });
       
       const chatMessages = [
         { role: 'system' as const, content: character.systemPrompt },

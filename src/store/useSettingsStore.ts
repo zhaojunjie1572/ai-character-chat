@@ -2,11 +2,13 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { ApiProvider } from '@/lib/api';
 
 export interface AppSettings {
   apiKey: string;
   apiBaseURL: string;
   apiModel: string;
+  apiProvider: ApiProvider;
   voiceEnabled: boolean;
   voiceInputEnabled: boolean;
   backgroundImage: string;
@@ -22,6 +24,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   apiKey: '',
   apiBaseURL: 'https://api.openai.com/v1',
   apiModel: 'gpt-3.5-turbo',
+  apiProvider: 'openai',
   voiceEnabled: false,
   voiceInputEnabled: false,
   backgroundImage: '',

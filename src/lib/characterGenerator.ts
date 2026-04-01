@@ -1,4 +1,4 @@
-import { apiService } from './api';
+import { apiService, ApiProvider } from './api';
 
 export interface GeneratedCharacter {
   name: string;
@@ -63,10 +63,16 @@ export async function generateCharacter(
   name: string,
   apiKey: string,
   apiBaseURL: string,
-  apiModel: string
+  apiModel: string,
+  apiProvider: ApiProvider = 'openai'
 ): Promise<GeneratedCharacter | null> {
   try {
-    apiService.setConfig(apiKey, apiBaseURL, apiModel);
+    apiService.setConfig({
+      apiKey,
+      baseURL: apiBaseURL,
+      model: apiModel,
+      provider: apiProvider,
+    });
 
     const response = await apiService.chat({
       messages: [

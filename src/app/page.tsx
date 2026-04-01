@@ -21,10 +21,13 @@ import { storage } from '@/lib/storage';
 import { TtsConfig, loadTtsConfig, saveTtsConfig, EDGE_TTS_VOICES } from '@/lib/ttsService';
 import { searchByPinyin } from '@/lib/pinyin';
 
+type ApiProvider = 'openai' | 'azure' | 'claude' | 'gemini' | 'ollama' | 'local_proxy' | 'custom';
+
 interface AppSettings {
   apiKey: string;
   apiBaseURL: string;
   apiModel: string;
+  apiProvider: ApiProvider;
   voiceEnabled: boolean;
   voiceInputEnabled: boolean;
   backgroundImage: string;
@@ -40,6 +43,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   apiKey: '',
   apiBaseURL: 'https://api.openai.com/v1',
   apiModel: 'gpt-3.5-turbo',
+  apiProvider: 'openai',
   voiceEnabled: false,
   voiceInputEnabled: false,
   backgroundImage: '',
@@ -93,6 +97,12 @@ export default function Home() {
   const [showTtsSettings, setShowTtsSettings] = useState(false);
   const [ttsConfig, setTtsConfig] = useState<TtsConfig>(loadTtsConfig());
 
+  // API 连接和模型相关状态
+  const [availableModels, setAvailableModels] = useState<{ id: string; name: string }[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'connected' | 'error'>('idle');
+  const [connectionMessage, setConnectionMessage] = useState('');
+
   useEffect(() => {
     const savedSettings = localStorage.getItem('ai_app_settings');
     if (savedSettings) {
@@ -140,6 +150,158 @@ export default function Home() {
     setShowMoreMenu(false);
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 2000);
+  };
+
+  // 获取模型列表
+  const fetchModels = async () => {
+    if (!tempSettings.apiBaseURL) {
+      setConnectionMessage('请先输入 API 地址');
+      return;
+    }
+
+    setIsLoadingModels(true);
+    setConnectionStatus('testing');
+    setConnectionMessage('');
+
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      if (tempSettings.apiKey) {
+        headers['Authorization'] = `Bearer ${tempSettings.apiKey}`;
+      }
+
+      // 构建 models 端点 URL，自动处理 /v1 路径
+      const baseUrl = tempSettings.apiBaseURL.replace(/\/$/, '');
+      const modelsUrl = baseUrl.endsWith('/v1') 
+        ? `${baseUrl}/models` 
+        : `${baseUrl}/v1/models`;
+      
+      console.log('请求模型列表:', modelsUrl);
+      
+      const response = await fetch(modelsUrl, {
+        method: 'GET',
+        headers,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('模型列表响应:', data);
+
+      // 支持多种响应格式
+      let models: { id: string; name: string }[] = [];
+      
+      if (data.data && Array.isArray(data.data)) {
+        // OpenAI 标准格式: { data: [{ id: '...', ... }] }
+        models = data.data.map((m: any) => ({
+          id: m.id || m.name || '',
+          name: m.id || m.name || '',
+        }));
+      } else if (data.models && Array.isArray(data.models)) {
+        // 另一种常见格式: { models: [...] }
+        models = data.models.map((m: any) => ({
+          id: m.id || m.name || m || '',
+          name: m.id || m.name || m || '',
+        }));
+      } else if (Array.isArray(data)) {
+        // 直接数组格式: [...]
+        models = data.map((m: any) => ({
+          id: m.id || m.name || m || '',
+          name: m.id || m.name || m || '',
+        }));
+      }
+
+      // 过滤掉空值
+      models = models.filter(m => m.id);
+
+      setAvailableModels(models);
+      setConnectionStatus('connected');
+      setConnectionMessage(`成功获取 ${models.length} 个模型`);
+    } catch (error) {
+      console.error('获取模型失败:', error);
+      setConnectionStatus('error');
+      setConnectionMessage(error instanceof Error ? error.message : '连接失败');
+      setAvailableModels([]);
+    } finally {
+      setIsLoadingModels(false);
+    }
+  };
+
+  // 测试连接
+  const testConnection = async () => {
+    if (!tempSettings.apiBaseURL) {
+      setConnectionMessage('请先输入 API 地址');
+      return;
+    }
+
+    setConnectionStatus('testing');
+    setConnectionMessage('');
+
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      if (tempSettings.apiKey) {
+        headers['Authorization'] = `Bearer ${tempSettings.apiKey}`;
+      }
+
+      // 构建 models 端点 URL，自动处理 /v1 路径
+      const testBaseUrl = tempSettings.apiBaseURL.replace(/\/$/, '');
+      const testModelsUrl = testBaseUrl.endsWith('/v1') 
+        ? `${testBaseUrl}/models` 
+        : `${testBaseUrl}/v1/models`;
+      
+      console.log('测试连接 - 请求:', testModelsUrl);
+      
+      // 尝试获取模型列表来测试连接
+      const response = await fetch(testModelsUrl, {
+        method: 'GET',
+        headers,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      setConnectionStatus('connected');
+      
+      // 同时获取模型列表
+      const data = await response.json();
+      console.log('连接测试 - 模型列表响应:', data);
+      
+      // 支持多种响应格式
+      let models: { id: string; name: string }[] = [];
+      
+      if (data.data && Array.isArray(data.data)) {
+        models = data.data.map((m: any) => ({
+          id: m.id || m.name || '',
+          name: m.id || m.name || '',
+        }));
+      } else if (data.models && Array.isArray(data.models)) {
+        models = data.models.map((m: any) => ({
+          id: m.id || m.name || m || '',
+          name: m.id || m.name || m || '',
+        }));
+      } else if (Array.isArray(data)) {
+        models = data.map((m: any) => ({
+          id: m.id || m.name || m || '',
+          name: m.id || m.name || m || '',
+        }));
+      }
+      
+      models = models.filter(m => m.id);
+      setAvailableModels(models);
+      setConnectionMessage(`连接成功，获取 ${models.length} 个模型`);
+    } catch (error) {
+      console.error('连接测试失败:', error);
+      setConnectionStatus('error');
+      setConnectionMessage(error instanceof Error ? error.message : '连接失败');
+    }
   };
 
   const getAllChatSessions = () => {
@@ -1138,35 +1300,157 @@ export default function Home() {
             <div className="space-y-5">
               <div className="space-y-4">
                 <h4 className="font-medium text-gray-900 text-sm">API配置</h4>
+                
+                {/* API提供商选择 */}
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1.5">API密钥</label>
+                  <label className="block text-sm text-gray-600 mb-1.5">API提供商</label>
+                  <select
+                    value={tempSettings.apiProvider}
+                    onChange={(e) => setTempSettings({ ...tempSettings, apiProvider: e.target.value as ApiProvider })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#07C160] focus:border-[#07C160] text-sm"
+                  >
+                    <option value="openai">OpenAI</option>
+                    <option value="azure">Azure OpenAI</option>
+                    <option value="claude">Claude (Anthropic)</option>
+                    <option value="gemini">Gemini (Google)</option>
+                    <option value="ollama">Ollama (本地)</option>
+                    <option value="local_proxy">本地 HTTP 反代服务</option>
+                    <option value="custom">自定义</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {tempSettings.apiProvider === 'local_proxy' 
+                      ? '连接到本地 HTTP 反代服务，如 SillyTavern 兼容的反代' 
+                      : '选择API提供商，系统会自动适配对应的请求格式'}
+                  </p>
+                </div>
+
+                {/* 本地 HTTP 反代服务特殊说明 */}
+                {tempSettings.apiProvider === 'local_proxy' && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
+                    <p className="font-medium mb-1">本地 HTTP 反代服务</p>
+                    <p className="text-xs">
+                      用于连接 SillyTavern 或其他工具提供的本地反代服务。
+                      支持 /v1/chat/completions 端点的 OpenAI 兼容格式。
+                    </p>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1.5">
+                    {tempSettings.apiProvider === 'local_proxy' ? '反代密码/密钥 (可选)' : 'API密钥'}
+                  </label>
                   <input
                     type="password"
                     value={tempSettings.apiKey}
                     onChange={(e) => setTempSettings({ ...tempSettings, apiKey: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#07C160] focus:border-[#07C160] text-sm"
-                    placeholder="sk-..."
+                    placeholder={
+                      tempSettings.apiProvider === 'local_proxy' 
+                        ? '如果反代服务需要密码，请在此输入' 
+                        : tempSettings.apiProvider === 'ollama' 
+                          ? '本地模型可不填' 
+                          : 'sk-...'
+                    }
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1.5">API基础URL</label>
+                  <label className="block text-sm text-gray-600 mb-1.5">
+                    {tempSettings.apiProvider === 'local_proxy' ? '反代服务器 URL' : 'API基础URL'}
+                  </label>
                   <input
                     type="text"
                     value={tempSettings.apiBaseURL}
                     onChange={(e) => setTempSettings({ ...tempSettings, apiBaseURL: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#07C160] focus:border-[#07C160] text-sm"
-                    placeholder="https://api.openai.com/v1"
+                    placeholder={
+                      tempSettings.apiProvider === 'local_proxy' 
+                        ? 'http://127.0.0.1:9998' 
+                        : 'https://api.openai.com/v1'
+                    }
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    {tempSettings.apiProvider === 'local_proxy' 
+                      ? '输入本地反代服务的地址，例如 http://127.0.0.1:9998' 
+                      : ''}
+                  </p>
                 </div>
+                {/* 连接测试和模型选择 */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={testConnection}
+                    disabled={connectionStatus === 'testing'}
+                    className="flex-1 px-4 py-2 bg-[#07C160] text-white rounded-lg hover:bg-[#06AD56] disabled:opacity-50 text-sm flex items-center justify-center gap-2"
+                  >
+                    {connectionStatus === 'testing' ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        测试中...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        测试连接
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* 连接状态显示 */}
+                {connectionStatus !== 'idle' && connectionMessage && (
+                  <div className={`p-3 rounded-lg text-sm ${
+                    connectionStatus === 'connected' 
+                      ? 'bg-green-50 text-green-700 border border-green-200' 
+                      : connectionStatus === 'error'
+                        ? 'bg-red-50 text-red-700 border border-red-200'
+                        : 'bg-gray-50 text-gray-700 border border-gray-200'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      {connectionStatus === 'connected' && <div className="w-2 h-2 bg-green-500 rounded-full" />}
+                      {connectionStatus === 'error' && <AlertCircle className="w-4 h-4" />}
+                      {connectionStatus === 'testing' && <RefreshCw className="w-4 h-4 animate-spin" />}
+                      {connectionMessage}
+                    </div>
+                  </div>
+                )}
+
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1.5">模型</label>
-                  <input
-                    type="text"
-                    value={tempSettings.apiModel}
-                    onChange={(e) => setTempSettings({ ...tempSettings, apiModel: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#07C160] focus:border-[#07C160] text-sm"
-                    placeholder="gpt-3.5-turbo"
-                  />
+                  <div className="flex justify-between items-center mb-1.5">
+                    <label className="block text-sm text-gray-600">模型选择</label>
+                    <button
+                      onClick={fetchModels}
+                      disabled={isLoadingModels || !tempSettings.apiBaseURL}
+                      className="text-xs text-[#07C160] hover:text-[#06AD56] disabled:opacity-50 flex items-center gap-1"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isLoadingModels ? 'animate-spin' : ''}`} />
+                      {isLoadingModels ? '刷新中...' : '刷新模型'}
+                    </button>
+                  </div>
+                  {availableModels.length > 0 ? (
+                    <select
+                      value={tempSettings.apiModel}
+                      onChange={(e) => setTempSettings({ ...tempSettings, apiModel: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#07C160] focus:border-[#07C160] text-sm"
+                    >
+                      <option value="">选择模型...</option>
+                      {availableModels.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={tempSettings.apiModel}
+                      onChange={(e) => setTempSettings({ ...tempSettings, apiModel: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#07C160] focus:border-[#07C160] text-sm"
+                      placeholder={
+                        tempSettings.apiProvider === 'local_proxy' 
+                          ? 'gemini-3.1-pro-preview' 
+                          : 'gpt-3.5-turbo'
+                      }
+                    />
+                  )}
                 </div>
               </div>
 

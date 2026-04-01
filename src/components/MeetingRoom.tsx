@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Character } from '@/types/character';
 import { MeetingSession, MeetingParticipant, MeetingMessage } from '@/types/meeting';
 import { meetingStorage } from '@/lib/meetingStorage';
-import { apiService } from '@/lib/api';
+import { apiService, ApiProvider } from '@/lib/api';
 import { X, Plus, Users, MessageCircle, Download, ChevronRight, ChevronLeft, Settings, Play, Square, Mic, Volume2, VolumeX, Zap, Trash2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -17,6 +17,7 @@ interface AppSettings {
   apiKey: string;
   apiBaseURL: string;
   apiModel: string;
+  apiProvider: ApiProvider;
   voiceEnabled: boolean;
   voiceInputEnabled: boolean;
   voiceVolume: number;
@@ -29,6 +30,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   apiKey: '',
   apiBaseURL: 'https://api.openai.com/v1',
   apiModel: 'gpt-3.5-turbo',
+  apiProvider: 'openai',
   voiceEnabled: false,
   voiceInputEnabled: false,
   voiceVolume: 1,
@@ -344,7 +346,12 @@ export function MeetingRoom({ characters, onClose }: MeetingRoomProps) {
     }
 
     // 让每个参与者依次回复
-    apiService.setConfig(settings.apiKey, settings.apiBaseURL, settings.apiModel);
+    apiService.setConfig({
+      apiKey: settings.apiKey,
+      baseURL: settings.apiBaseURL,
+      model: settings.apiModel,
+      provider: settings.apiProvider,
+    });
 
     for (const participant of currentMeeting.participants) {
       if (!participant.isActive) continue;
@@ -464,7 +471,12 @@ ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
     const targetName = targetParticipant?.character.name || '该参与者';
 
     // 只让选中的参与者回复
-    apiService.setConfig(settings.apiKey, settings.apiBaseURL, settings.apiModel);
+    apiService.setConfig({
+      apiKey: settings.apiKey,
+      baseURL: settings.apiBaseURL,
+      model: settings.apiModel,
+      provider: settings.apiProvider,
+    });
 
     for (const participant of currentMeeting.participants) {
       // 只处理选中的参与者
@@ -660,7 +672,12 @@ ${contextMessages}`;
     const speaker = selectNextSpeaker(latestMeeting.participants, latestMeeting.messages);
 
     try {
-      apiService.setConfig(settings.apiKey, settings.apiBaseURL, settings.apiModel);
+      apiService.setConfig({
+        apiKey: settings.apiKey,
+        baseURL: settings.apiBaseURL,
+        model: settings.apiModel,
+        provider: settings.apiProvider,
+      });
 
       // 使用 Token-based 上下文
       const contextText = buildContext(latestMeeting.messages, 2000);

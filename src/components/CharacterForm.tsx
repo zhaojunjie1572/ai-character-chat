@@ -15,6 +15,7 @@ interface CharacterFormProps {
     apiKey: string;
     apiBaseURL: string;
     apiModel: string;
+    apiProvider?: string;
   };
 }
 
@@ -115,7 +116,8 @@ export function CharacterForm({ character, onSave, onCancel, apiSettings }: Char
         aiNameInput.trim(),
         apiSettings.apiKey,
         apiSettings.apiBaseURL,
-        apiSettings.apiModel
+        apiSettings.apiModel,
+        (apiSettings.apiProvider as any) || 'openai'
       );
 
       if (generated) {

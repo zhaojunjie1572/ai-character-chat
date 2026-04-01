@@ -1,12 +1,12 @@
 /**
- * API服务 - 兼容层
- * 基于 apiCompatible.ts 提供增强的API兼容性
- * 支持 OpenAI、Azure OpenAI、Claude、Gemini、Ollama 等多种API提供商
+ * API服务统一入口
+ * 基于 apiUnified.ts 提供增强的API兼容性
+ * 支持 OpenAI、Azure OpenAI、Claude、Gemini、Ollama、DeepSeek、WebSocket、Proxy 等多种API提供商
  */
 
 export {
   // 主服务和类
-  CompatibleAPIService as APIService,
+  UnifiedAPIService as APIService,
   apiService,
   createAPIService,
 
@@ -16,6 +16,9 @@ export {
   type ChatResponse,
   type APIConfig,
   type StreamChunk,
+  type ChatMessage,
+  type MessageAttachment,
+  type StreamCallbacks,
 
   // 错误类
   APIError,
@@ -25,4 +28,4 @@ export {
   // 兼容旧版导出
   chat,
   chatStream,
-} from './apiCompatible';
+} from './apiUnified';

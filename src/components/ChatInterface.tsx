@@ -19,6 +19,7 @@ interface AppSettings {
   apiBaseURL: string;
   apiModel: string;
   apiProvider: ApiProvider;
+  maxTokens: number;
   voiceEnabled: boolean;
   voiceInputEnabled: boolean;
   backgroundImage: string;
@@ -33,6 +34,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   apiBaseURL: 'https://api.openai.com/v1',
   apiModel: 'gpt-3.5-turbo',
   apiProvider: 'openai',
+  maxTokens: 4000,
   voiceEnabled: false,
   voiceInputEnabled: false,
   backgroundImage: '',
@@ -467,7 +469,7 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
       const response = await apiService.chat({
         messages: chatMessages,
         temperature: 0.7,
-        max_tokens: 4000,
+        max_tokens: settings.maxTokens || 4000,
       });
 
       if (response.error) {

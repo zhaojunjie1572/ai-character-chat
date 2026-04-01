@@ -28,6 +28,7 @@ interface AppSettings {
   apiBaseURL: string;
   apiModel: string;
   apiProvider: ApiProvider;
+  maxTokens: number;
   voiceEnabled: boolean;
   voiceInputEnabled: boolean;
   backgroundImage: string;
@@ -44,6 +45,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   apiBaseURL: 'https://api.openai.com/v1',
   apiModel: 'gpt-3.5-turbo',
   apiProvider: 'openai',
+  maxTokens: 4000,
   voiceEnabled: false,
   voiceInputEnabled: false,
   backgroundImage: '',
@@ -1372,6 +1374,22 @@ export default function Home() {
                     {tempSettings.apiProvider === 'local_proxy' 
                       ? '输入本地反代服务的地址，例如 http://127.0.0.1:9998' 
                       : ''}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1.5">最大 Token 数</label>
+                  <input
+                    type="number"
+                    value={tempSettings.maxTokens}
+                    onChange={(e) => setTempSettings({ ...tempSettings, maxTokens: parseInt(e.target.value) || 4000 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#07C160] focus:border-[#07C160] text-sm"
+                    placeholder="4000"
+                    min={1000}
+                    max={32000}
+                    step={1000}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    限制 AI 回复的最大长度，建议 4000-8000
                   </p>
                 </div>
                 {/* 连接测试和模型选择 */}

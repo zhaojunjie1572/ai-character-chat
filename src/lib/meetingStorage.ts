@@ -90,7 +90,7 @@ export const meetingStorage = {
   },
 
   // 添加消息到会议室
-  addMessage: (meetingId: string, message: Omit<MeetingMessage, 'id' | 'timestamp'>): MeetingMessage => {
+  addMessage: (meetingId: string, message: Omit<MeetingMessage, 'id' | 'timestamp'>): string => {
     const meeting = meetingStorage.getMeeting(meetingId);
     if (!meeting) throw new Error('会议室不存在');
 
@@ -104,7 +104,20 @@ export const meetingStorage = {
     meeting.updatedAt = Date.now();
     meetingStorage.updateMeeting(meeting);
 
-    return newMessage;
+    return newMessage.id;
+  },
+
+  // 更新消息内容（用于流式响应）
+  updateMessageContent: (meetingId: string, messageId: string, content: string): void => {
+    const meeting = meetingStorage.getMeeting(meetingId);
+    if (!meeting) throw new Error('会议室不存在');
+
+    const messageIndex = meeting.messages.findIndex(m => m.id === messageId);
+    if (messageIndex >= 0) {
+      meeting.messages[messageIndex].content = content;
+      meeting.updatedAt = Date.now();
+      meetingStorage.updateMeeting(meeting);
+    }
   },
 
   // 删除单条消息

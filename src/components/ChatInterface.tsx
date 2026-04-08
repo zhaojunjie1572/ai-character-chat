@@ -466,14 +466,84 @@ export function ChatInterface({ character, onClose }: ChatInterfaceProps) {
         { role: 'user' as const, content: userMessage.content },
       ];
 
+      // 对于自定义提供商，优先使用流式请求
+      if (settings.apiProvider === 'custom') {
+        
+        // 先创建一个空的助手消息
+        const assistantMessage: Message = {
+          id: uuidv4(),
+          characterId: character.id,
+          role: 'assistant',
+          content: '',
+          timestamp: Date.now(),
+        };
+        
+        setMessages(prev => [...prev, assistantMessage]);
+        
+        try {
+          let fullContent = '';
+          const stream = apiService.chatStream({
+            messages: chatMessages,
+            temperature: 0.7,
+            max_tokens: settings.maxTokens || 4000,
+          });
+          
+          for await (const chunk of stream) {
+            if (chunk.error) {
+              throw new Error(chunk.error);
+            }
+            if (chunk.content) {
+              fullContent += chunk.content;
+              // 实时更新消息
+              setMessages(prev => prev.map(msg => 
+                msg.id === assistantMessage.id 
+                  ? { ...msg, content: fullContent }
+                  : msg
+              ));
+            }
+          }
+          
+          // 保存完整消息
+          assistantMessage.content = fullContent;
+          storage.addMessage(character.id, assistantMessage);
+          
+          if (!fullContent || fullContent.trim() === '') {
+            throw new Error('API 返回空内容，请检查 API 配置');
+          }
+          
+          if (settings.voiceEnabled) {
+            speakMessage(fullContent);
+          }
+          
+          // 刷新历史记录列表
+          loadHistories();
+          setIsLoading(false);
+          return;
+          
+        } catch (err) {
+          // 如果流式请求失败，回退到非流式请求
+          console.warn('流式请求失败，回退到非流式请求:', err);
+          // 移除临时消息
+          setMessages(prev => prev.filter(msg => msg.id !== assistantMessage.id));
+        }
+      }
+
+      // 非流式请求（或回退方案）
       const response = await apiService.chat({
         messages: chatMessages,
         temperature: 0.7,
         max_tokens: settings.maxTokens || 4000,
       });
 
+      console.log('API Response:', response);
+
       if (response.error) {
         throw new Error(response.error);
+      }
+
+      if (!response.content || response.content.trim() === '') {
+        console.warn('API returned empty content');
+        throw new Error('API 返回空内容，请检查 API 配置');
       }
 
       const assistantMessage: Message = {

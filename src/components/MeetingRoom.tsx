@@ -374,47 +374,91 @@ export function MeetingRoom({ characters, onClose }: MeetingRoomProps) {
 
 ${contextMessages ? '之前的讨论：\n' + contextMessages : ''}`;
 
-        const response = await apiService.chat({
-          messages: [
-            { role: 'system' as const, content: systemPrompt },
-            { role: 'user' as const, content: `主持人说：${content.trim()}\n\n请给出你的专业意见（${participant.maxLength}字以内）：` },
-          ],
-          temperature: 0.7,
-          max_tokens: Math.min(participant.maxLength * 2, 1000),
-        });
-
-        if (response.error) {
-          throw new Error(response.error);
-        }
-
-        // 截断回复以确保不超过字数限制
-        let replyContent = response.content;
-        if (replyContent.length > participant.maxLength) {
-          replyContent = replyContent.slice(0, participant.maxLength) + '...';
-        }
-
+        // 先创建一个空的助手消息
         const participantMessage: Omit<MeetingMessage, 'id' | 'timestamp'> = {
           meetingId: currentMeeting.id,
           characterId: participant.characterId,
           role: 'assistant',
-          content: replyContent,
+          content: '',
           round: currentMeeting.currentRound,
           participantOrder: participant.order,
         };
-
-        meetingStorage.addMessage(currentMeeting.id, participantMessage);
+        
+        const newMessageId = meetingStorage.addMessage(currentMeeting.id, participantMessage);
+        let fullContent = '';
         
         // 更新当前会议状态
-        const latestMeeting = meetingStorage.getMeeting(currentMeeting.id);
+        let latestMeeting = meetingStorage.getMeeting(currentMeeting.id);
+        if (latestMeeting) {
+          setCurrentMeeting(latestMeeting);
+        }
+        
+        // 对于自定义提供商优先使用流式请求
+        if (settings.apiProvider === 'custom') {
+          try {
+            const stream = apiService.chatStream({
+              messages: [
+                { role: 'system' as const, content: systemPrompt },
+                { role: 'user' as const, content: `主持人说：${content.trim()}\n\n请给出你的专业意见（${participant.maxLength}字以内）：` },
+              ],
+              temperature: 0.7,
+              max_tokens: Math.min(participant.maxLength * 2, 1000),
+            });
+            
+            for await (const chunk of stream) {
+              if (chunk.error) {
+                throw new Error(chunk.error);
+              }
+              if (chunk.content) {
+                fullContent += chunk.content;
+                // 实时更新消息
+                meetingStorage.updateMessageContent(currentMeeting.id, newMessageId, fullContent);
+                const updatedMeeting = meetingStorage.getMeeting(currentMeeting.id);
+                if (updatedMeeting) {
+                  setCurrentMeeting(updatedMeeting);
+                }
+              }
+            }
+          } catch (err) {
+            console.warn('流式请求失败，回退到非流式:', err);
+            fullContent = ''; // 清空，下面用非流式重新获取
+          }
+        }
+        
+        // 如果还没有内容，使用非流式请求
+        if (!fullContent || fullContent.trim() === '') {
+          const response = await apiService.chat({
+            messages: [
+              { role: 'system' as const, content: systemPrompt },
+              { role: 'user' as const, content: `主持人说：${content.trim()}\n\n请给出你的专业意见（${participant.maxLength}字以内）：` },
+            ],
+            temperature: 0.7,
+            max_tokens: Math.min(participant.maxLength * 2, 1000),
+          });
+
+          if (response.error) {
+            throw new Error(response.error);
+          }
+
+          fullContent = response.content;
+        }
+
+        // 截断回复以确保不超过字数限制
+        if (fullContent.length > participant.maxLength) {
+          fullContent = fullContent.slice(0, participant.maxLength) + '...';
+        }
+        
+        // 更新最终内容
+        meetingStorage.updateMessageContent(currentMeeting.id, newMessageId, fullContent);
+        
+        // 更新当前会议状态
+        latestMeeting = meetingStorage.getMeeting(currentMeeting.id);
         if (latestMeeting) {
           setCurrentMeeting(latestMeeting);
           
           // 如果开启了语音朗读，朗读最新消息
           if (settings.voiceEnabled) {
-            const newMessage = latestMeeting.messages[latestMeeting.messages.length - 1];
-            if (newMessage && newMessage.characterId === participant.characterId) {
-              speakMessage(replyContent, newMessage.id);
-            }
+            speakMessage(fullContent, newMessageId);
           }
         }
       } catch (err) {
@@ -503,47 +547,91 @@ ${targetName} 的观点是："${target.content}"
 之前的讨论：
 ${contextMessages}`;
 
-        const response = await apiService.chat({
-          messages: [
-            { role: 'system' as const, content: systemPrompt },
-            { role: 'user' as const, content: `主持人问：${content.trim()}\n\n请针对 ${targetName} 的观点发表你的看法（${participant.maxLength}字以内）：` },
-          ],
-          temperature: 0.7,
-          max_tokens: Math.min(participant.maxLength * 2, 1000),
-        });
-
-        if (response.error) {
-          throw new Error(response.error);
-        }
-
-        // 截断回复以确保不超过字数限制
-        let replyContent = response.content;
-        if (replyContent.length > participant.maxLength) {
-          replyContent = replyContent.slice(0, participant.maxLength) + '...';
-        }
-
+        // 先创建一个空的助手消息
         const participantMessage: Omit<MeetingMessage, 'id' | 'timestamp'> = {
           meetingId: currentMeeting.id,
           characterId: participant.characterId,
           role: 'assistant',
-          content: replyContent,
+          content: '',
           round: currentMeeting.currentRound,
           participantOrder: participant.order,
         };
+        
+        const newMessageId = meetingStorage.addMessage(currentMeeting.id, participantMessage);
+        let fullContent = '';
+        
+        // 更新当前会议状态
+        let latestMeeting = meetingStorage.getMeeting(currentMeeting.id);
+        if (latestMeeting) {
+          setCurrentMeeting(latestMeeting);
+        }
+        
+        // 对于自定义提供商优先使用流式请求
+        if (settings.apiProvider === 'custom') {
+          try {
+            const stream = apiService.chatStream({
+              messages: [
+                { role: 'system' as const, content: systemPrompt },
+                { role: 'user' as const, content: `主持人问：${content.trim()}\n\n请针对 ${targetName} 的观点发表你的看法（${participant.maxLength}字以内）：` },
+              ],
+              temperature: 0.7,
+              max_tokens: Math.min(participant.maxLength * 2, 1000),
+            });
+            
+            for await (const chunk of stream) {
+              if (chunk.error) {
+                throw new Error(chunk.error);
+              }
+              if (chunk.content) {
+                fullContent += chunk.content;
+                // 实时更新消息
+                meetingStorage.updateMessageContent(currentMeeting.id, newMessageId, fullContent);
+                const updatedMeeting = meetingStorage.getMeeting(currentMeeting.id);
+                if (updatedMeeting) {
+                  setCurrentMeeting(updatedMeeting);
+                }
+              }
+            }
+          } catch (err) {
+            console.warn('流式请求失败，回退到非流式:', err);
+            fullContent = ''; // 清空，下面用非流式重新获取
+          }
+        }
+        
+        // 如果还没有内容，使用非流式请求
+        if (!fullContent || fullContent.trim() === '') {
+          const response = await apiService.chat({
+            messages: [
+              { role: 'system' as const, content: systemPrompt },
+              { role: 'user' as const, content: `主持人问：${content.trim()}\n\n请针对 ${targetName} 的观点发表你的看法（${participant.maxLength}字以内）：` },
+            ],
+            temperature: 0.7,
+            max_tokens: Math.min(participant.maxLength * 2, 1000),
+          });
 
-        meetingStorage.addMessage(currentMeeting.id, participantMessage);
+          if (response.error) {
+            throw new Error(response.error);
+          }
+
+          fullContent = response.content;
+        }
+
+        // 截断回复以确保不超过字数限制
+        if (fullContent.length > participant.maxLength) {
+          fullContent = fullContent.slice(0, participant.maxLength) + '...';
+        }
+        
+        // 更新最终内容
+        meetingStorage.updateMessageContent(currentMeeting.id, newMessageId, fullContent);
 
         // 更新当前会议状态
-        const latestMeeting = meetingStorage.getMeeting(currentMeeting.id);
+        latestMeeting = meetingStorage.getMeeting(currentMeeting.id);
         if (latestMeeting) {
           setCurrentMeeting(latestMeeting);
 
           // 如果开启了语音朗读，朗读最新消息
           if (settings.voiceEnabled) {
-            const newMessage = latestMeeting.messages[latestMeeting.messages.length - 1];
-            if (newMessage && newMessage.characterId === participant.characterId) {
-              speakMessage(replyContent, newMessage.id);
-            }
+            speakMessage(fullContent, newMessageId);
           }
         }
       } catch (err) {
@@ -701,47 +789,91 @@ ${contextText || '（刚开始讨论）'}
 
 请发表你的观点，要体现你的性格特点！`;
 
-      const response = await apiService.chat({
-        messages: [
-          { role: 'system' as const, content: systemPrompt },
-          { role: 'user' as const, content: `请就"${topic}"发表你的看法，可以回应之前的观点（${speaker.maxLength}字以内）：` },
-        ],
-        temperature: 0.8,
-        max_tokens: Math.min(speaker.maxLength * 2, 1000),
-      });
-
-      if (response.error) {
-        throw new Error(response.error);
-      }
-
-      // 截断回复
-      let replyContent = response.content;
-      if (replyContent.length > speaker.maxLength) {
-        replyContent = replyContent.slice(0, speaker.maxLength) + '...';
-      }
-
+      // 先创建一个空的助手消息
       const participantMessage: Omit<MeetingMessage, 'id' | 'timestamp'> = {
         meetingId: meeting.id,
         characterId: speaker.characterId,
         role: 'assistant',
-        content: replyContent,
+        content: '',
         round: latestMeeting.currentRound,
         participantOrder: speaker.order,
       };
+      
+      const newMessageId = meetingStorage.addMessage(meeting.id, participantMessage);
+      let replyContent = '';
+      
+      // 更新当前会议状态
+      let updatedMeeting = meetingStorage.getMeeting(meeting.id);
+      if (updatedMeeting) {
+        setCurrentMeeting(updatedMeeting);
+      }
+      
+      // 对于自定义提供商优先使用流式请求
+      if (settings.apiProvider === 'custom') {
+        try {
+          const stream = apiService.chatStream({
+            messages: [
+              { role: 'system' as const, content: systemPrompt },
+              { role: 'user' as const, content: `请就"${topic}"发表你的看法，可以回应之前的观点（${speaker.maxLength}字以内）：` },
+            ],
+            temperature: 0.8,
+            max_tokens: Math.min(speaker.maxLength * 2, 1000),
+          });
+          
+          for await (const chunk of stream) {
+            if (chunk.error) {
+              throw new Error(chunk.error);
+            }
+            if (chunk.content) {
+              replyContent += chunk.content;
+              // 实时更新消息
+              meetingStorage.updateMessageContent(meeting.id, newMessageId, replyContent);
+              const updatedMeeting = meetingStorage.getMeeting(meeting.id);
+              if (updatedMeeting) {
+                setCurrentMeeting(updatedMeeting);
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('流式请求失败，回退到非流式:', err);
+          replyContent = ''; // 清空，下面用非流式重新获取
+        }
+      }
+      
+      // 如果还没有内容，使用非流式请求
+      if (!replyContent || replyContent.trim() === '') {
+        const response = await apiService.chat({
+          messages: [
+            { role: 'system' as const, content: systemPrompt },
+            { role: 'user' as const, content: `请就"${topic}"发表你的看法，可以回应之前的观点（${speaker.maxLength}字以内）：` },
+          ],
+          temperature: 0.8,
+          max_tokens: Math.min(speaker.maxLength * 2, 1000),
+        });
 
-      meetingStorage.addMessage(meeting.id, participantMessage);
+        if (response.error) {
+          throw new Error(response.error);
+        }
+
+        replyContent = response.content;
+      }
+
+      // 截断回复
+      if (replyContent.length > speaker.maxLength) {
+        replyContent = replyContent.slice(0, speaker.maxLength) + '...';
+      }
+      
+      // 更新最终内容
+      meetingStorage.updateMessageContent(meeting.id, newMessageId, replyContent);
 
       // 更新会议状态
-      const updatedMeeting = meetingStorage.getMeeting(meeting.id);
+      updatedMeeting = meetingStorage.getMeeting(meeting.id);
       if (updatedMeeting) {
         setCurrentMeeting(updatedMeeting);
 
         // 语音朗读
         if (settings.voiceEnabled) {
-          const newMessage = updatedMeeting.messages[updatedMeeting.messages.length - 1];
-          if (newMessage) {
-            speakMessage(replyContent, newMessage.id);
-          }
+          speakMessage(replyContent, newMessageId);
         }
       }
 

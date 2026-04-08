@@ -320,6 +320,12 @@ function buildHeaders(provider: ApiProvider, apiKey: string, customHeaders?: Rec
 function buildRequestURL(provider: ApiProvider, baseURL: string, model: string, apiKey: string): string {
   const normalizedURL = baseURL.replace(/\/$/, '');
 
+  // 检查 URL 是否已经包含 chat/completions 或类似的完整端点路径
+  const hasCompleteEndpoint = normalizedURL.includes('/chat/completions') || 
+                              normalizedURL.includes('/completions') ||
+                              normalizedURL.includes('/v1/chat') ||
+                              normalizedURL.includes('/v1/completions');
+
   switch (provider) {
     case 'azure':
       return `${normalizedURL}/chat/completions?api-version=2024-02-01`;
@@ -337,6 +343,9 @@ function buildRequestURL(provider: ApiProvider, baseURL: string, model: string, 
     case 'proxy':
       // 本地 HTTP 反代服务使用 OpenAI 兼容的 /v1/chat/completions 端点
       // 如果 URL 已经包含 /v1，则不再添加
+      if (hasCompleteEndpoint) {
+        return normalizedURL;
+      }
       if (normalizedURL.endsWith('/v1')) {
         return `${normalizedURL}/chat/completions`;
       }
@@ -344,25 +353,140 @@ function buildRequestURL(provider: ApiProvider, baseURL: string, model: string, 
 
     case 'deepseek':
     case 'openai':
+      // OpenAI 和 DeepSeek 使用标准格式
+      if (hasCompleteEndpoint) {
+        return normalizedURL;
+      }
+      if (normalizedURL.endsWith('/v1')) {
+        return `${normalizedURL}/chat/completions`;
+      }
+      return `${normalizedURL}/v1/chat/completions`;
+
     case 'custom':
     default:
-      return `${normalizedURL}/chat/completions`;
+      // 自定义提供商：如果用户已经提供了完整端点，直接使用
+      // 否则，才添加 /v1/chat/completions 后缀
+      if (hasCompleteEndpoint) {
+        return normalizedURL;
+      }
+      if (normalizedURL.endsWith('/v1')) {
+        return `${normalizedURL}/chat/completions`;
+      }
+      return `${normalizedURL}/v1/chat/completions`;
   }
 }
 
 // 解析响应
 function parseResponse(provider: ApiProvider, data: any): ChatResponse {
+  // 辅助函数：尝试多种可能的字段路径获取内容
+  const extractContent = (data: any): string => {
+    // 只在开发环境或内容为空时打印调试信息
+    const isDebug = !data.choices?.[0]?.message?.content;
+    if (isDebug) {
+      console.log('响应调试 - 完整响应对象的所有键:', Object.keys(data));
+      if (data.choices && data.choices[0]) {
+        console.log('响应调试 - choices[0] 的所有键:', Object.keys(data.choices[0]));
+        if (data.choices[0].message) {
+          console.log('响应调试 - choices[0].message 的所有键:', Object.keys(data.choices[0].message));
+        }
+      }
+    }
+
+    const possiblePaths = [
+      // OpenAI 标准格式
+      () => data.choices?.[0]?.message?.content,
+      // 尝试 choices[0] 的其他字段
+      () => data.choices?.[0]?.content,
+      () => data.choices?.[0]?.text,
+      () => data.choices?.[0]?.message?.text,
+      // 尝试整个 choices 数组
+      () => data.choices?.[0]?.delta?.content,
+      // Claude 格式
+      () => data.content?.[0]?.text,
+      // Gemini 格式
+      () => data.candidates?.[0]?.content?.parts?.[0]?.text,
+      // Ollama 格式
+      () => data.message?.content,
+      // 直接 content 字段
+      () => data.content,
+      // 直接 text 字段
+      () => data.text,
+      // 其他可能的格式
+      () => data.response,
+      () => data.output,
+      () => data.result,
+      () => data.answer,
+      () => data.completion,
+      // 推理内容字段 (某些模型如 DeepSeek-R1 使用)
+      () => data.choices?.[0]?.message?.reasoning_content,
+      () => data.reasoning_content,
+      // 额外的可能字段
+      () => data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments,
+      () => data.generations?.[0]?.text,
+      () => data.output?.text,
+      () => data.choices?.[0]?.message?.function_call?.arguments,
+      // 尝试递归查找任意字符串字段（排除元数据字段）
+      () => {
+        // 要排除的元数据字段列表
+        const excludeKeys = new Set([
+          'id', 'object', 'model', 'created', 'finish_reason', 
+          'native_finish_reason', 'role', 'index'
+        ]);
+        
+        const findContentString = (obj: any, parentKey?: string): string | null => {
+          if (!obj || typeof obj !== 'object') return null;
+          
+          for (const key of Object.keys(obj)) {
+            const value = obj[key];
+            
+            // 跳过元数据字段
+            if (excludeKeys.has(key)) continue;
+            
+            // 如果是字符串且不是太短（避免一些短的标记），返回它
+            if (typeof value === 'string' && value.trim() !== '' && value.length > 20) {
+              console.log(`找到可能的内容字段: ${parentKey ? parentKey + '.' : ''}${key}`);
+              return value;
+            }
+            
+            // 递归查找
+            const found = findContentString(value, parentKey ? `${parentKey}.${key}` : key);
+            if (found) return found;
+          }
+          return null;
+        };
+        
+        return findContentString(data);
+      },
+    ];
+
+    for (let i = 0; i < possiblePaths.length; i++) {
+      try {
+        const getPath = possiblePaths[i];
+        const value = getPath();
+        if (value && typeof value === 'string' && value.trim() !== '') {
+          console.log(`Content found at path index ${i}:`, value.substring(0, 100));
+          return value;
+        }
+      } catch (e) {
+        console.warn(`Path ${i} failed:`, e);
+        // 继续尝试下一个路径
+      }
+    }
+    console.warn('所有路径都尝试过了，没有找到内容');
+    return '';
+  };
+
   switch (provider) {
     case 'claude':
       return {
-        content: data.content?.[0]?.text || '',
+        content: extractContent(data) || data.content?.[0]?.text || '',
         usage: data.usage,
         model: data.model,
       };
 
     case 'gemini':
       return {
-        content: data.candidates?.[0]?.content?.parts?.[0]?.text || '',
+        content: extractContent(data) || data.candidates?.[0]?.content?.parts?.[0]?.text || '',
         usage: {
           prompt_tokens: data.usageMetadata?.promptTokenCount,
           completion_tokens: data.usageMetadata?.candidatesTokenCount,
@@ -372,25 +496,42 @@ function parseResponse(provider: ApiProvider, data: any): ChatResponse {
 
     case 'ollama':
       return {
-        content: data.message?.content || '',
+        content: extractContent(data) || data.message?.content || '',
       };
 
     case 'local_proxy':
     case 'proxy':
     case 'deepseek':
-      // 本地 HTTP 反代服务返回 OpenAI 兼容格式
-      return {
-        content: data.choices?.[0]?.message?.content || '',
-        usage: data.usage,
-        model: data.model,
-      };
-
     case 'azure':
     case 'openai':
     case 'custom':
     default:
+      // 使用增强的内容提取逻辑
+      let content = extractContent(data);
+      
+      // 如果 content 为空，但存在 tool_calls，尝试从 tool_calls 中提取
+      if (!content && data.choices?.[0]?.message?.tool_calls) {
+        const toolCalls = data.choices[0].message.tool_calls;
+        try {
+          content = toolCalls.map((tc: any) => {
+            if (tc.function?.arguments) {
+              return tc.function.arguments;
+            }
+            if (tc.function?.name) {
+              return `调用函数: ${tc.function.name}`;
+            }
+            return JSON.stringify(tc);
+          }).join('\n');
+        } catch (e) {
+          console.warn('Failed to extract tool_calls content:', e);
+        }
+      }
+      
+      if (!content) {
+        console.warn('Could not extract content from response:', JSON.stringify(data, null, 2));
+      }
       return {
-        content: data.choices?.[0]?.message?.content || '',
+        content: content || '',
         usage: data.usage,
         model: data.model,
       };
@@ -405,15 +546,46 @@ function parseStreamChunk(provider: ApiProvider, line: string): StreamChunk[] {
     return [{ content: '', done: true }];
   }
 
+  // 辅助函数：从数据中提取内容
+  const extractStreamContent = (data: any): string => {
+    const possiblePaths = [
+      // 标准 OpenAI 流式格式
+      () => data.choices?.[0]?.delta?.content,
+      () => data.choices?.[0]?.message?.content,
+      () => data.choices?.[0]?.content,
+      () => data.choices?.[0]?.text,
+      // 其他可能的格式
+      () => data.delta?.content,
+      () => data.delta?.text,
+      () => data.message?.content,
+      () => data.content,
+      () => data.text,
+      // 推理内容
+      () => data.choices?.[0]?.delta?.reasoning_content,
+      () => data.choices?.[0]?.message?.reasoning_content,
+      () => data.reasoning_content,
+    ];
+
+    for (const getPath of possiblePaths) {
+      try {
+        const value = getPath();
+        if (value && typeof value === 'string' && value.trim() !== '') {
+          return value;
+        }
+      } catch {
+        // 继续尝试
+      }
+    }
+    return '';
+  };
+
   if (!trimmedLine.startsWith('data: ')) {
     // 尝试直接解析（某些反代服务可能不使用 data: 前缀）
     try {
       const data = JSON.parse(trimmedLine);
-      if (data.choices) {
-        const content = data.choices?.[0]?.delta?.content || data.choices?.[0]?.message?.content;
-        if (content) {
-          chunks.push({ content, done: false });
-        }
+      const content = extractStreamContent(data);
+      if (content) {
+        chunks.push({ content, done: false });
       }
     } catch {
       // 忽略解析错误的行
@@ -423,41 +595,10 @@ function parseStreamChunk(provider: ApiProvider, line: string): StreamChunk[] {
 
   try {
     const data = JSON.parse(trimmedLine.slice(6));
+    const content = extractStreamContent(data);
 
-    switch (provider) {
-      case 'claude':
-        chunks.push({
-          content: data.delta?.text || '',
-          done: false,
-        });
-        break;
-
-      case 'ollama':
-        chunks.push({
-          content: data.message?.content || '',
-          done: data.done || false,
-        });
-        break;
-
-      case 'local_proxy':
-      case 'proxy':
-      case 'deepseek':
-        // 本地 HTTP 反代服务使用 OpenAI 兼容的流式格式
-        chunks.push({
-          content: data.choices?.[0]?.delta?.content || '',
-          done: false,
-        });
-        break;
-
-      case 'azure':
-      case 'openai':
-      case 'custom':
-      default:
-        chunks.push({
-          content: data.choices?.[0]?.delta?.content || '',
-          done: false,
-        });
-        break;
+    if (content) {
+      chunks.push({ content, done: false });
     }
   } catch (e) {
     // 忽略解析错误
@@ -512,6 +653,11 @@ export class UnifiedAPIService {
     if (config.baseURL && !config.provider && this.config.provider === 'openai') {
       this.config.provider = detectProvider(this.config.baseURL, this.config.model);
     }
+    console.log('API Service config:', {
+      provider: this.config.provider,
+      baseURL: this.config.baseURL,
+      model: this.config.model,
+    });
   }
 
   getConfig(): APIConfig {
@@ -629,6 +775,9 @@ export class UnifiedAPIService {
       const headers = buildHeaders(this.config.provider, this.config.apiKey, this.config.headers, this.config.proxyKey);
       const body = buildRequestBody(this.config.provider, request, this.config.model);
 
+      console.log('Request URL:', url);
+      console.log('Request body:', JSON.stringify(body, null, 2));
+
       // Gemini 使用 URL 参数传递 key，不需要 Authorization header
       let finalUrl = url;
       if (this.config.provider === 'gemini') {
@@ -646,7 +795,10 @@ export class UnifiedAPIService {
       }
 
       const data = await response.json();
-      return parseResponse(this.config.provider, data);
+      console.log('Raw API response:', data);
+      const parsed = parseResponse(this.config.provider, data);
+      console.log('Parsed response:', parsed);
+      return parsed;
     }).catch((error) => {
       if (error instanceof APIError) {
         return {
@@ -1088,10 +1240,12 @@ export class UnifiedAPIService {
       return [];
     }
 
+    // 对于自定义提供商，如果没有 API Key，仍然尝试获取模型列表（某些服务不需要认证）
     if (!this.config.apiKey && 
         this.config.provider !== 'ollama' && 
         this.config.provider !== 'proxy' &&
-        this.config.provider !== 'local_proxy') {
+        this.config.provider !== 'local_proxy' &&
+        this.config.provider !== 'custom') {
       throw new Error('请先设置API密钥');
     }
 
@@ -1127,10 +1281,17 @@ export class UnifiedAPIService {
       baseUrl = baseUrl.slice(0, -1);
     }
 
+    // 检查 baseURL 是否已经包含完整的路径，如果是则提取基础部分
+    let modelsBaseUrl = baseUrl;
+    if (baseUrl.includes('/chat/completions') || baseUrl.includes('/completions')) {
+      // 移除聊天端点路径，得到基础 API URL
+      modelsBaseUrl = baseUrl.replace(/\/(chat\/)?completions.*$/, '');
+    }
+
     // 尝试多个可能的模型列表端点
     const urls = [
-      `${baseUrl}/models`,
-      `${baseUrl}/v1/models`,
+      `${modelsBaseUrl}/models`,
+      `${modelsBaseUrl}/v1/models`,
     ];
 
     let lastError: Error | null = null;
@@ -1197,6 +1358,13 @@ export class UnifiedAPIService {
         lastError = err instanceof Error ? err : new Error('请求失败');
         continue;
       }
+    }
+    
+    // 对于自定义提供商，如果无法获取模型列表，返回空数组而不是抛出错误
+    // 这样用户仍然可以手动输入模型名称
+    if (this.config.provider === 'custom') {
+      console.warn('自定义提供商无法获取模型列表，返回空数组');
+      return [];
     }
     
     if (lastError) {

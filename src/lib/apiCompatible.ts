@@ -208,6 +208,12 @@ function buildHeaders(provider: ApiProvider, apiKey: string, customHeaders?: Rec
 function buildRequestURL(provider: ApiProvider, baseURL: string, model: string, apiKey: string): string {
   const normalizedURL = baseURL.replace(/\/$/, '');
 
+  // 检查 URL 是否已经包含 chat/completions 或类似的完整端点路径
+  const hasCompleteEndpoint = normalizedURL.includes('/chat/completions') || 
+                              normalizedURL.includes('/completions') ||
+                              normalizedURL.includes('/v1/chat') ||
+                              normalizedURL.includes('/v1/completions');
+
   switch (provider) {
     case 'azure':
       return `${normalizedURL}/chat/completions?api-version=2024-02-01`;
@@ -224,15 +230,35 @@ function buildRequestURL(provider: ApiProvider, baseURL: string, model: string, 
     case 'local_proxy':
       // 本地 HTTP 反代服务使用 OpenAI 兼容的 /v1/chat/completions 端点
       // 如果 URL 已经包含 /v1，则不再添加
+      if (hasCompleteEndpoint) {
+        return normalizedURL;
+      }
       if (normalizedURL.endsWith('/v1')) {
         return `${normalizedURL}/chat/completions`;
       }
       return `${normalizedURL}/v1/chat/completions`;
 
     case 'openai':
+      // OpenAI 使用标准格式
+      if (hasCompleteEndpoint) {
+        return normalizedURL;
+      }
+      if (normalizedURL.endsWith('/v1')) {
+        return `${normalizedURL}/chat/completions`;
+      }
+      return `${normalizedURL}/v1/chat/completions`;
+
     case 'custom':
     default:
-      return `${normalizedURL}/chat/completions`;
+      // 自定义提供商：如果用户已经提供了完整端点，直接使用
+      // 否则，才添加 /v1/chat/completions 后缀
+      if (hasCompleteEndpoint) {
+        return normalizedURL;
+      }
+      if (normalizedURL.endsWith('/v1')) {
+        return `${normalizedURL}/chat/completions`;
+      }
+      return `${normalizedURL}/v1/chat/completions`;
   }
 }
 
@@ -273,8 +299,32 @@ function parseResponse(provider: ApiProvider, data: any): ChatResponse {
     case 'openai':
     case 'custom':
     default:
+      // 尝试从多个可能的位置提取内容
+      let content = data.choices?.[0]?.message?.content;
+      
+      // 如果 content 为 null/undefined，尝试其他字段
+      if (!content) {
+        content = data.choices?.[0]?.message?.reasoning_content;
+      }
+      if (!content && data.choices?.[0]?.message?.tool_calls) {
+        const toolCalls = data.choices[0].message.tool_calls;
+        try {
+          content = toolCalls.map((tc: any) => {
+            if (tc.function?.arguments) {
+              return tc.function.arguments;
+            }
+            if (tc.function?.name) {
+              return `调用函数: ${tc.function.name}`;
+            }
+            return JSON.stringify(tc);
+          }).join('\n');
+        } catch (e) {
+          console.warn('Failed to extract tool_calls content:', e);
+        }
+      }
+      
       return {
-        content: data.choices?.[0]?.message?.content || '',
+        content: content || '',
         usage: data.usage,
         model: data.model,
       };

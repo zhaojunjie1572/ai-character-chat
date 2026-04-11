@@ -21,7 +21,7 @@ import { storage } from '@/lib/storage';
 import { TtsConfig, loadTtsConfig, saveTtsConfig, EDGE_TTS_VOICES } from '@/lib/ttsService';
 import { searchByPinyin } from '@/lib/pinyin';
 
-type ApiProvider = 'openai' | 'azure' | 'claude' | 'gemini' | 'ollama' | 'local_proxy' | 'custom';
+type ApiProvider = 'openai' | 'azure' | 'claude' | 'gemini' | 'ollama' | 'local_proxy' | 'minimax' | 'custom';
 
 interface AppSettings {
   apiKey: string;
@@ -161,6 +161,23 @@ export default function Home() {
       return;
     }
 
+    // Minimax 没有标准的 models 端点，提供预设的模型列表
+    if (tempSettings.apiProvider === 'minimax') {
+      const minimaxModels = [
+        { id: 'MiniMax-M2.7-highspeed', name: 'MiniMax-M2.7-highspeed (极速版 100tps)' },
+        { id: 'MiniMax-M2.7', name: 'MiniMax-M2.7 (自我迭代 60tps)' },
+        { id: 'MiniMax-M2.5-highspeed', name: 'MiniMax-M2.5-highspeed (极速版 100tps)' },
+        { id: 'MiniMax-M2.5', name: 'MiniMax-M2.5 (顶尖性能 60tps)' },
+        { id: 'MiniMax-M2.1-highspeed', name: 'MiniMax-M2.1-highspeed (极速版 100tps)' },
+        { id: 'MiniMax-M2.1', name: 'MiniMax-M2.1 (多语言编程 60tps)' },
+        { id: 'MiniMax-M2', name: 'MiniMax-M2 (高效编码/Agent)' },
+      ];
+      setAvailableModels(minimaxModels);
+      setConnectionStatus('connected');
+      setConnectionMessage('已加载 Minimax 预设模型列表');
+      return;
+    }
+
     setIsLoadingModels(true);
     setConnectionStatus('testing');
     setConnectionMessage('');
@@ -252,6 +269,43 @@ export default function Home() {
         headers['Authorization'] = `Bearer ${tempSettings.apiKey}`;
       }
 
+      // 对于 Minimax，使用简单的聊天请求来测试连接
+      if (tempSettings.apiProvider === 'minimax') {
+        const testUrl = `${tempSettings.apiBaseURL.replace(/\/$/, '')}/text/chatcompletion_v2`;
+        console.log('测试 Minimax 连接 - 请求:', testUrl);
+        
+        const response = await fetch(testUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            model: tempSettings.apiModel || 'abab7.5-chat',
+            messages: [{ role: 'user', content: 'Hi' }],
+            max_tokens: 5,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+        }
+
+        // Minimax 测试成功，设置预设模型列表
+        const minimaxModels = [
+          { id: 'MiniMax-M2.7-highspeed', name: 'MiniMax-M2.7-highspeed (极速版 100tps)' },
+          { id: 'MiniMax-M2.7', name: 'MiniMax-M2.7 (自我迭代 60tps)' },
+          { id: 'MiniMax-M2.5-highspeed', name: 'MiniMax-M2.5-highspeed (极速版 100tps)' },
+          { id: 'MiniMax-M2.5', name: 'MiniMax-M2.5 (顶尖性能 60tps)' },
+          { id: 'MiniMax-M2.1-highspeed', name: 'MiniMax-M2.1-highspeed (极速版 100tps)' },
+          { id: 'MiniMax-M2.1', name: 'MiniMax-M2.1 (多语言编程 60tps)' },
+          { id: 'MiniMax-M2', name: 'MiniMax-M2 (高效编码/Agent)' },
+        ];
+        setAvailableModels(minimaxModels);
+        setConnectionStatus('connected');
+        setConnectionMessage('Minimax 连接成功！');
+        return;
+      }
+
+      // 对于其他提供商，继续使用 models 端点
       // 构建 models 端点 URL，自动处理 /v1 路径
       const testBaseUrl = tempSettings.apiBaseURL.replace(/\/$/, '');
       const testModelsUrl = testBaseUrl.endsWith('/v1') 
@@ -1316,6 +1370,7 @@ export default function Home() {
                     <option value="claude">Claude (Anthropic)</option>
                     <option value="gemini">Gemini (Google)</option>
                     <option value="ollama">Ollama (本地)</option>
+                    <option value="minimax">Minimax (上海稀宇)</option>
                     <option value="local_proxy">本地 HTTP 反代服务</option>
                     <option value="custom">自定义</option>
                   </select>
@@ -1351,6 +1406,8 @@ export default function Home() {
                         ? '如果反代服务需要密码，请在此输入' 
                         : tempSettings.apiProvider === 'ollama' 
                           ? '本地模型可不填' 
+                          : tempSettings.apiProvider === 'minimax'
+                          ? 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...'
                           : 'sk-...'
                     }
                   />
@@ -1367,6 +1424,8 @@ export default function Home() {
                     placeholder={
                       tempSettings.apiProvider === 'local_proxy' 
                         ? 'http://127.0.0.1:9998' 
+                        : tempSettings.apiProvider === 'minimax'
+                        ? 'https://api.minimax.chat/v1'
                         : 'https://api.openai.com/v1'
                     }
                   />
@@ -1465,6 +1524,8 @@ export default function Home() {
                       placeholder={
                         tempSettings.apiProvider === 'local_proxy' 
                           ? 'gemini-3.1-pro-preview' 
+                          : tempSettings.apiProvider === 'minimax'
+                          ? 'MiniMax-M2.7-highspeed'
                           : 'gpt-3.5-turbo'
                       }
                     />

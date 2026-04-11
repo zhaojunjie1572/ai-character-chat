@@ -15,6 +15,7 @@ export type ApiProvider =
   | 'gemini' 
   | 'ollama' 
   | 'deepseek'
+  | 'minimax'
   | 'local_proxy' 
   | 'proxy'
   | 'websocket'
@@ -125,6 +126,7 @@ function detectProvider(baseURL: string, model: string): ApiProvider {
   if (url.includes('google') || url.includes('gemini') || modelLower.includes('gemini')) return 'gemini';
   if (url.includes('ollama') || url.includes('localhost:11434')) return 'ollama';
   if (url.includes('deepseek') || modelLower.includes('deepseek')) return 'deepseek';
+  if (url.includes('minimax') || modelLower.includes('minimax')) return 'minimax';
   if (url.includes('ws://') || url.includes('wss://')) return 'websocket';
   if (url.includes('openai')) return 'openai';
 
@@ -229,6 +231,7 @@ function buildRequestBody(provider: ApiProvider, request: ChatRequest, model: st
 
     case 'azure':
     case 'deepseek':
+    case 'minimax':
       return {
         ...baseBody,
         messages: request.messages.map(m => ({
@@ -305,6 +308,7 @@ function buildHeaders(provider: ApiProvider, apiKey: string, customHeaders?: Rec
     case 'claude':
     case 'ollama':
     case 'deepseek':
+    case 'minimax':
     case 'custom':
     default:
       if (apiKey) {
@@ -324,7 +328,8 @@ function buildRequestURL(provider: ApiProvider, baseURL: string, model: string, 
   const hasCompleteEndpoint = normalizedURL.includes('/chat/completions') || 
                               normalizedURL.includes('/completions') ||
                               normalizedURL.includes('/v1/chat') ||
-                              normalizedURL.includes('/v1/completions');
+                              normalizedURL.includes('/v1/completions') ||
+                              normalizedURL.includes('/chatcompletion_v2');
 
   switch (provider) {
     case 'azure':
@@ -338,6 +343,13 @@ function buildRequestURL(provider: ApiProvider, baseURL: string, model: string, 
 
     case 'claude':
       return `${normalizedURL}/messages`;
+
+    case 'minimax':
+      // Minimax 使用特殊的端点
+      if (hasCompleteEndpoint) {
+        return normalizedURL;
+      }
+      return `${normalizedURL}/text/chatcompletion_v2`;
 
     case 'local_proxy':
     case 'proxy':
@@ -502,6 +514,7 @@ function parseResponse(provider: ApiProvider, data: any): ChatResponse {
     case 'local_proxy':
     case 'proxy':
     case 'deepseek':
+    case 'minimax':
     case 'azure':
     case 'openai':
     case 'custom':

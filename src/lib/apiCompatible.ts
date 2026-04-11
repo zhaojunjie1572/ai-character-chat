@@ -7,7 +7,7 @@ import { Message } from '@/types/character';
 
 // ==================== 类型定义 ====================
 
-export type ApiProvider = 'openai' | 'azure' | 'claude' | 'gemini' | 'ollama' | 'local_proxy' | 'custom';
+export type ApiProvider = 'openai' | 'azure' | 'claude' | 'gemini' | 'ollama' | 'local_proxy' | 'minimax' | 'custom';
 
 export interface ChatRequest {
   messages: { role: 'system' | 'user' | 'assistant'; content: string }[];
@@ -89,6 +89,7 @@ function detectProvider(baseURL: string, model: string): ApiProvider {
   if (url.includes('anthropic') || modelLower.includes('claude')) return 'claude';
   if (url.includes('google') || url.includes('gemini') || modelLower.includes('gemini')) return 'gemini';
   if (url.includes('ollama') || url.includes('localhost:11434')) return 'ollama';
+  if (url.includes('minimax') || modelLower.includes('minimax')) return 'minimax';
   if (url.includes('openai')) return 'openai';
 
   return 'custom';
@@ -138,6 +139,7 @@ function buildRequestBody(provider: ApiProvider, request: ChatRequest, model: st
       };
 
     case 'azure':
+    case 'minimax':
       return {
         ...baseBody,
         messages: request.messages,
@@ -193,6 +195,7 @@ function buildHeaders(provider: ApiProvider, apiKey: string, customHeaders?: Rec
     case 'openai':
     case 'claude':
     case 'ollama':
+    case 'minimax':
     case 'custom':
     default:
       if (apiKey) {
@@ -212,7 +215,8 @@ function buildRequestURL(provider: ApiProvider, baseURL: string, model: string, 
   const hasCompleteEndpoint = normalizedURL.includes('/chat/completions') || 
                               normalizedURL.includes('/completions') ||
                               normalizedURL.includes('/v1/chat') ||
-                              normalizedURL.includes('/v1/completions');
+                              normalizedURL.includes('/v1/completions') ||
+                              normalizedURL.includes('/chatcompletion_v2');
 
   switch (provider) {
     case 'azure':
@@ -226,6 +230,13 @@ function buildRequestURL(provider: ApiProvider, baseURL: string, model: string, 
 
     case 'claude':
       return `${normalizedURL}/messages`;
+
+    case 'minimax':
+      // Minimax 使用特殊的端点
+      if (hasCompleteEndpoint) {
+        return normalizedURL;
+      }
+      return `${normalizedURL}/text/chatcompletion_v2`;
 
     case 'local_proxy':
       // 本地 HTTP 反代服务使用 OpenAI 兼容的 /v1/chat/completions 端点
@@ -297,6 +308,7 @@ function parseResponse(provider: ApiProvider, data: any): ChatResponse {
 
     case 'azure':
     case 'openai':
+    case 'minimax':
     case 'custom':
     default:
       // 尝试从多个可能的位置提取内容
@@ -369,6 +381,7 @@ function parseStreamChunk(provider: ApiProvider, line: string): StreamChunk[] {
 
       case 'azure':
       case 'openai':
+      case 'minimax':
       case 'custom':
       default:
         chunks.push({

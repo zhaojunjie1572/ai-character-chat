@@ -664,6 +664,118 @@ export default function Home() {
     }
   };
 
+  const convertRichCharacter = (data: any): any => {
+    if (!data || !data.name) return null;
+
+    let systemPrompt = '';
+    
+    if (data.systemPrompt) {
+      systemPrompt = data.systemPrompt;
+    } else {
+      systemPrompt = `【核心指令】
+你现在完全成为【${data.name}】，继承以下所有设定。
+
+【基础身份档案】
+- 姓名：${data.name}${data.title ? `\n- 称号：${data.title}` : ''}
+- 简介：${data.description || ''}
+
+${data.personality ? `【性格特点】
+${data.personality}` : ''}
+
+${data.values ? `【价值观】
+${data.values}` : ''}
+
+${data.experience ? `【人生经历】
+${data.experience}` : ''}
+
+${data.lifeEvents && data.lifeEvents.length > 0 ? `【重要事件】
+${data.lifeEvents.map((e: any) => `- ${e.event || e.year || ''}: ${e.desc || ''}`).join('\n')}` : ''}
+
+${data.legendaryStories && data.legendaryStories.length > 0 ? `【传奇故事】
+${data.legendaryStories.map((s: any) => `- ${s.story || ''}: ${s.desc || ''}`).join('\n')}` : ''}
+
+${data.quotes && data.quotes.length > 0 ? `【经典语录】
+${data.quotes.map((q: any) => `- "${q.text || ''}"${q.source ? ` —— ${q.source}` : ''}`).join('\n')}` : ''}
+
+${data.chatStyle ? `【对话风格】
+${data.chatStyle.styleDesc || ''}
+问候语：${data.chatStyle.greeting || ''}` : ''}
+
+${data.skills && data.skills.length > 0 ? `【技能】
+${data.skills.map((s: any) => `- ${s.icon || ''} ${s.name || ''}: ${s.desc || ''} (${s.level || ''})`).join('\n')}` : ''}
+
+你是有血有肉、会思考、有情绪的${data.name}。`;
+    }
+
+    return {
+      name: data.name,
+      title: data.title || '',
+      description: data.description || '',
+      systemPrompt: systemPrompt,
+      avatar: data.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(data.name)}`
+    };
+  };
+
+  const validateCharacter = (data: any): boolean => {
+    if (!data || !data.name) return false;
+    if (data.avatar && data.description && data.systemPrompt) return true;
+    return !!convertRichCharacter(data);
+  };
+
+  const handleImportCharacters = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const content = event.target?.result as string;
+        const data = JSON.parse(content);
+        
+        let charactersToImport: any[] = [];
+        
+        if (Array.isArray(data)) {
+          charactersToImport = data;
+        } else if (validateCharacter(data)) {
+          charactersToImport = [data];
+        } else {
+          setSyncError('导入的JSON格式不正确');
+          setTimeout(() => setSyncError(''), 3000);
+          return;
+        }
+
+        const processedCharacters = charactersToImport
+          .map(char => {
+            if (char.avatar && char.description && char.systemPrompt) {
+              const { id, createdAt, updatedAt, ...rest } = char;
+              return rest;
+            }
+            return convertRichCharacter(char);
+          })
+          .filter(Boolean);
+        
+        if (processedCharacters.length === 0) {
+          setSyncError('没有找到有效的角色数据');
+          setTimeout(() => setSyncError(''), 3000);
+          return;
+        }
+
+        if (confirm(`确定要导入 ${processedCharacters.length} 个角色吗？`)) {
+          processedCharacters.forEach(charData => {
+            addCharacter(charData);
+          });
+          setSyncMessage(`成功导入 ${processedCharacters.length} 个角色`);
+          setTimeout(() => setSyncMessage(''), 3000);
+        }
+      } catch (error) {
+        setSyncError('解析JSON文件失败');
+        setTimeout(() => setSyncError(''), 3000);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   const openEditForm = (character: Character) => {
     setEditingCharacter(character);
     setShowForm(true);
@@ -883,14 +995,34 @@ export default function Home() {
             ) : (
               <>
                 {/* 新的朋友 */}
-                <div 
-                  onClick={() => setShowForm(true)}
-                  className="flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200 active:bg-gray-100 cursor-pointer"
-                >
-                  <div className="w-11 h-11 bg-[#07C160] rounded-lg flex items-center justify-center shrink-0">
-                    <PlusIcon className="w-6 h-6 text-white" />
+                <div className="bg-white border-b border-gray-200">
+                  <div 
+                    onClick={() => setShowForm(true)}
+                    className="flex items-center gap-3 px-4 py-3 active:bg-gray-100 cursor-pointer"
+                  >
+                    <div className="w-11 h-11 bg-[#07C160] rounded-lg flex items-center justify-center shrink-0">
+                      <PlusIcon className="w-6 h-6 text-white" />
+                    </div>
+                    <span className="text-base text-gray-900">新的朋友</span>
                   </div>
-                  <span className="text-base text-gray-900">新的朋友</span>
+                  <div className="flex items-center gap-3 px-4 py-3 border-t border-gray-100">
+                    <input
+                      type="file"
+                      accept=".json"
+                      id="import-characters"
+                      onChange={handleImportCharacters}
+                      className="hidden"
+                    />
+                    <label
+                      htmlFor="import-characters"
+                      className="flex items-center gap-3 flex-1 active:bg-gray-100 cursor-pointer"
+                    >
+                      <div className="w-11 h-11 bg-blue-500 rounded-lg flex items-center justify-center shrink-0">
+                        <Upload className="w-6 h-6 text-white" />
+                      </div>
+                      <span className="text-base text-gray-900">导入角色</span>
+                    </label>
+                  </div>
                 </div>
                 
                 {/* 分组管理入口 */}
